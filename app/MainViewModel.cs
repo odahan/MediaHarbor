@@ -97,7 +97,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public async Task AddTextAsync(string text)
     {
-        var links = text.Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries).Where(IsUrl).Distinct().ToArray();
+        var links = MediaLogic.SplitLinks(text);
         if (links.Length == 0) { Notice = "Paste a YouTube link (youtube.com or youtu.be). Other websites are not supported."; return; }
         foreach (var url in links)
         {
@@ -114,7 +114,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public void Enqueue(string url, DownloadOptions options)
     {
-        if (!IsUrl(url) && !url.StartsWith("ytsearch1:", StringComparison.Ordinal))
+        if (!MediaLogic.IsValidDownloadUrl(url))
         {
             Notice = "Only YouTube links are supported.";
             return;
@@ -144,7 +144,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var results = await DownloadEngine.ListAsync(query, playlist, cancellation.Token);
             busy.Close();
             var selected = Dialogs.SelectResults(results, playlist ? "Choose playlist entries" : "Search results");
-            var playlistFolder = playlist ? Path.Combine(Folder, PlaylistFolderName(results)) : Folder;
+            var playlistFolder = playlist ? Path.Combine(Folder, MediaLogic.PlaylistFolderName(results)) : Folder;
             foreach (var entry in selected)
                 Enqueue(entry.Url, Options() with { Folder = playlistFolder, Prefix = playlist && Numbering ? $"{results.ToList().IndexOf(entry) + 1:000} - " : "" });
             Notice = $"Added {selected.Count} item(s)";
@@ -153,17 +153,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { Notice = ex.Message; MessageBox.Show(ex.Message, "Unable to read media"); }
         finally { busy.Close(); }
     }
-
-    private static string PlaylistFolderName(IReadOnlyList<SearchResult> results)
-    {
-        var name = results.Select(r => r.PlaylistTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t)) ?? "";
-        var invalid = Path.GetInvalidFileNameChars();
-        name = new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim().TrimEnd('.', ' ');
-        if (name.Length > 120) name = name[..120].TrimEnd('.', ' ');
-        return name.Length > 0 ? name : "Playlist " + DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss");
-    }
-
-    private static bool IsUrl(string text) => YouTubeLinks.IsSupported(text);
 
     private void CheckClipboard()
     {
@@ -174,7 +163,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var text = Clipboard.ContainsText() ? Clipboard.GetText().Trim() : "";
             if (text == previousClipboard) return;
             previousClipboard = text;
-            if (IsUrl(text) && MessageBox.Show("Download this copied link?\n\n" + text, "Media detected", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes) _ = AddTextAsync(text);
+            if (MediaLogic.IsValidDownloadUrl(text) && MessageBox.Show("Download this copied link?\n\n" + text, "Media detected", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes) _ = AddTextAsync(text);
         }
         catch (System.Runtime.InteropServices.COMException) { }
     }
@@ -221,7 +210,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             if (start == null) return;
             var duration = Dialogs.Prompt("Trim audio", "Duration (hh:mm:ss or seconds):", "30");
             if (duration == null) return;
-            if (!ValidTime(start) || !ValidTime(duration)) { MessageBox.Show("Enter a positive time in seconds or hh:mm:ss."); return; }
+            if (!MediaLogic.ValidTime(start) || !MediaLogic.ValidTime(duration)) { MessageBox.Show("Enter a positive time in seconds or hh:mm:ss."); return; }
             args.AddRange(["-ss", start, "-t", duration]);
         }
         args.AddRange(["-i", file.FileName]);
@@ -229,7 +218,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
         args.Add(save.FileName);
         await RunUtilityAsync("ffmpeg", args, "Converting media…");
     }
-    private static bool ValidTime(string text) => double.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var seconds) && seconds >= 0 || TimeSpan.TryParse(text, out var time) && time >= TimeSpan.Zero;
 
     public async void DownloadSubtitles(string url, string folder)
     {

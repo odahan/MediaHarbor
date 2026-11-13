@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Media Harbor — User Manual / Manuel d'utilisation</title>
+<style>
+  :root {
+    --bg: #0e1520;
+    --bg-panel: #151f2e;
+    --bg-card: #1a2637;
+    --border: #2a3b52;
+    --accent: #32a7c9;
+    --accent2: #3077c9;
+    --text: #dbe6f2;
+    --text-dim: #8fa3b8;
+    --code-bg: #0a1018;
+    --ok: #4caf7d;
+    --warn: #e0a63f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: linear-gradient(135deg, #123a5c 0%, #0c2440 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  header .logo { font-size: 22px; font-weight: 700; color: #fff; }
+  header .logo span { color: var(--accent); }
+  header .tagline { color: var(--text-dim); font-size: 13px; flex: 1; }
+  .lang-switch { display: flex; gap: 6px; }
+  .lang-switch button {
+    background: var(--bg-card); color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all .15s ease;
+  }
+  .lang-switch button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .lang-switch button:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+  .layout { display: flex; max-width: 1200px; margin: 0 auto; }
+  nav {
+    width: 240px; flex-shrink: 0; padding: 24px 16px;
+    position: sticky; top: 61px; align-self: flex-start;
+    max-height: calc(100vh - 61px); overflow-y: auto;
+  }
+  nav a {
+    display: block; color: var(--text-dim); text-decoration: none;
+    padding: 6px 12px; border-radius: 6px; font-size: 13.5px;
+    border-left: 2px solid transparent;
+  }
+  nav a:hover, nav a.active { color: var(--text); background: var(--bg-panel); border-left-color: var(--accent); }
+  main { flex: 1; padding: 30px 36px 80px; min-width: 0; }
+  section { margin-bottom: 48px; scroll-margin-top: 76px; }
+  h1 { font-size: 30px; color: #fff; margin-bottom: 6px; }
+  h2 {
+    font-size: 21px; color: #fff; margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h2::before { content: "▸ "; color: var(--accent); }
+  h3 { font-size: 16px; color: var(--accent); margin: 20px 0 8px; }
+  p { margin-bottom: 12px; color: var(--text); }
+  ul, ol { margin: 0 0 14px 22px; }
+  li { margin-bottom: 6px; }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px 22px; margin-bottom: 16px;
+  }
+  code {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 7px;
+    font-family: "Cascadia Code", Consolas, monospace; font-size: 13px;
+    color: #7fd4ec;
+  }
+  kbd {
+    background: #24344a; border: 1px solid #3b506d; border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 8px;
+    font-family: "Segoe UI", sans-serif; font-size: 12.5px; font-weight: 600; color: #fff;
+  }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border: 1px solid var(--border); }
+  th { background: var(--bg-panel); color: #fff; font-weight: 600; }
+  td { background: var(--bg-card); }
+  tr:hover td { background: #1f2d42; }
+  .note, .tip, .warning {
+    border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; font-size: 14px;
+    border-left: 4px solid;
+  }
+  .note { background: #12283c; border-color: var(--accent); }
+  .tip { background: #10312a; border-color: var(--ok); }
+  .warning { background: #33270f; border-color: var(--warn); }
+  .note::before { content: "ℹ "; }
+  .tip::before { content: "💡 "; }
+  .warning::before { content: "⚠ "; }
+  .step {
+    display: flex; gap: 14px; margin-bottom: 14px; align-items: flex-start;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 18px;
+  }
+  .step .num {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; font-weight: 700; display: flex;
+    align-items: center; justify-content: center; font-size: 14px;
+  }
+  .step .body { flex: 1; }
+  .step .body strong { color: #fff; }
+  .badge {
+    display: inline-block; background: #1d3a55; color: #7fd4ec;
+    border-radius: 4px; padding: 1px 8px; font-size: 12px; font-weight: 600;
+  }
+  [data-lang] { display: none; }
+  html[lang="en"] [data-lang="en"], html[lang="fr"] [data-lang="fr"] { display: block; }
+  html[lang="en"] [data-lang-inline="en"], html[lang="fr"] [data-lang-inline="fr"] { display: inline; }
+  footer {
+    border-top: 1px solid var(--border); padding: 20px 28px;
+    color: var(--text-dim); font-size: 13px; text-align: center;
+  }
+  @media (max-width: 860px) {
+    nav { display: none; }
+    main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">◉ Media <span>Harbor</span></div>
+  <div class="tagline">
+    <span data-lang-inline="en">User Manual v0.9.1 — YouTube media downloader for Windows</span>
+    <span data-lang-inline="fr">Manuel d'utilisation v0.9.1 — Téléchargeur de médias YouTube pour Windows</span>
+  </div>
+  <div class="lang-switch">
+    <button id="btn-en" onclick="setLang('en')">🇬🇧 English</button>
+    <button id="btn-fr" class="active" onclick="setLang('fr')">🇫🇷 Français</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav id="toc">
+    <a href="#intro" data-lang="en">Introduction</a>
+    <a href="#requirements" data-lang="en">Requirements</a>
+    <a href="#quickstart" data-lang="en">Quick start</a>
+    <a href="#interface" data-lang="en">Main window</a>
+    <a href="#download" data-lang="en">Downloading</a>
+    <a href="#search" data-lang="en">Search</a>
+    <a href="#playlists" data-lang="en">Playlists</a>
+    <a href="#jobs" data-lang="en">Download list</a>
+    <a href="#menu" data-lang="en">Menu &amp; tools</a>
+    <a href="#settings" data-lang="en">Settings</a>
+    <a href="#autodetect" data-lang="en">Auto detection</a>
+    <a href="#shortcuts" data-lang="en">Shortcuts</a>
+    <a href="#faq" data-lang="en">FAQ &amp; troubleshooting</a>
+
+    <a href="#intro" data-lang="fr">Introduction</a>
+    <a href="#requirements" data-lang="fr">Prérequis</a>
+    <a href="#quickstart" data-lang="fr">Démarrage rapide</a>
+    <a href="#interface" data-lang="fr">Fenêtre principale</a>
+    <a href="#download" data-lang="fr">Télécharger</a>
+    <a href="#search" data-lang="fr">Recherche</a>
+    <a href="#playlists" data-lang="fr">Playlists</a>
+    <a href="#jobs" data-lang="fr">Liste des téléchargements</a>
+    <a href="#menu" data-lang="fr">Menu &amp; outils</a>
+    <a href="#settings" data-lang="fr">Paramètres</a>
+    <a href="#autodetect" data-lang="fr">Détection automatique</a>
+    <a href="#shortcuts" data-lang="fr">Raccourcis</a>
+    <a href="#faq" data-lang="fr">FAQ &amp; dépannage</a>
+  </nav>
+
+  <main>
+
+    <!-- ==================== INTRO ==================== -->
+    <section id="intro">
+      <div data-lang="en">
+        <h1>Media Harbor User Manual</h1>
+        <p>
+          Media Harbor is a Windows desktop application that downloads videos and audio from
+          <strong>YouTube</strong> (videos, Shorts, music and playlists). It converts downloads to
+          <strong>MP4</strong> (video) or <strong>MP3</strong> (audio), can embed artwork and subtitles,
+          and includes file conversion and audio trimming tools.
+        </p>
+        <p>
+          It is powered by <span class="badge">yt-dlp</span> and <span class="badge">FFmpeg</span>,
+          both bundled with the application — no separate installation is required.
+        </p>
+        <div class="warning">
+          Media availability depends on YouTube and on your own access rights. Only download content
+          you are allowed to keep. Only YouTube links are supported.
+        </div>
+      </div>
+      <div data-lang="fr">
+        <h1>Manuel d'utilisation de Media Harbor</h1>
+        <p>
+          Media Harbor est une application Windows qui télécharge des vidéos et de l'audio depuis
+          <strong>YouTube</strong> (vidéos, Shorts, musique et playlists). Elle convertit les téléchargements
+          en <strong>MP4</strong> (vidéo) ou <strong>MP3</strong> (audio), peut intégrer pochettes et sous-titres,
+          et inclut des outils de conversion de fichiers et de découpe audio.
+        </p>
+        <p>
+          Elle s'appuie sur <span class="badge">yt-dlp</span> et <span class="badge">FFmpeg</span>,
+          tous deux fournis avec l'application — aucune installation séparée n'est nécessaire.
+        </p>
+        <div class="warning">
+          La disponibilité des médias dépend de YouTube et de vos droits d'accès. Ne téléchargez que
+          du contenu que vous êtes autorisé à conserver. Seuls les liens YouTube sont pris en charge.
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== REQUIREMENTS ==================== -->
+    <section id="requirements">
+      <div data-lang="en">
+        <h2>Requirements</h2>
+        <ul>
+          <li>Windows 10 or later (64-bit).</li>
+          <li>.NET 8 Desktop Runtime (required if not already installed).</li>
+          <li>An active internet connection.</li>
+          <li>Optional: a cookies file in Netscape format for age-restricted or members-only videos (see <a href="#settings" style="color:var(--accent)">Settings</a>).</li>
+        </ul>
+        <div class="note">
+          Launch the application with <code>MediaHarbor.exe</code>. Your settings and history are stored
+          in a <code>data</code> folder next to the executable (<code>settings.json</code>, <code>history.json</code>).
+        </div>
+      </div>
+      <div data-lang="fr">
+        <h2>Prérequis</h2>
+        <ul>
+          <li>Windows 10 ou ultérieur (64 bits).</li>
+          <li>.NET 8 Desktop Runtime (requis s'il n'est pas déjà installé).</li>
+          <li>Une connexion internet active.</li>
+          <li>Optionnel : un fichier de cookies au format Netscape pour les vidéos avec restriction d'âge ou réservées aux membres (voir <a href="#settings" style="color:var(--accent)">Paramètres</a>).</li>
+        </ul>
+        <div class="note">
+          Lancez l'application avec <code>MediaHarbor.exe</code>. Vos paramètres et votre historique sont
+          enregistrés dans un dossier <code>data</code> à côté de l'exécutable (<code>settings.json</code>, <code>history.json</code>).
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== QUICKSTART ==================== -->
+    <section id="quickstart">
+      <div data-lang="en">
+        <h2>Quick start</h2>
+        <div class="step"><div class="num">1</div><div class="body"><strong>Choose folder.</strong> Click the folder icon and pick where files will be saved (defaults to your Music folder).</div></div>
+        <div class="step"><div class="num">2</div><div class="body"><strong>Choose format.</strong> Select <em>Audio</em> (MP3) or <em>Video</em> (MP4).</div></div>
+        <div class="step"><div class="num">3</div><div class="body"><strong>Choose quality.</strong> Pick <em>Best</em>, <em>Normal</em> or <em>Custom</em> (bitrate for MP3, resolution for MP4).</div></div>
+        <div class="step"><div class="num">4</div><div class="body"><strong>Download.</strong> Copy a YouTube link, then click <em>Paste URL ⬇</em> or press <kbd>Ctrl</kbd>+<kbd>V</kbd>. The download starts automatically.</div></div>
+      </div>
+      <div data-lang="fr">
+        <h2>Démarrage rapide</h2>
+        <div class="step"><div class="num">1</div><div class="body"><strong>Choisir le dossier.</strong> Cliquez sur l'icône dossier et choisissez l'emplacement d'enregistrement (par défaut : dossier Musique).</div></div>
+        <div class="step"><div class="num">2</div><div class="body"><strong>Choisir le format.</strong> Sélectionnez <em>Audio</em> (MP3) ou <em>Vidéo</em> (MP4).</div></div>
+        <div class="step"><div class="num">3</div><div class="body"><strong>Choisir la qualité.</strong> Choisissez <em>Best</em>, <em>Normal</em> ou <em>Custom</em> (débit pour le MP3, résolution pour le MP4).</div></div>
+        <div class="step"><div class="num">4</div><div class="body"><strong>Télécharger.</strong> Copiez un lien YouTube, puis cliquez sur <em>Paste URL ⬇</em> ou appuyez sur <kbd>Ctrl</kbd>+<kbd>V</kbd>. Le téléchargement démarre automatiquement.</div></div>
+      </div>
+    </section>
+
+    <!-- ==================== INTERFACE ==================== -->
+    <section id="interface">
+      <div data-lang="en">
+        <h2>Main window</h2>
+        <p>The window is organized in four numbered areas:</p>
+        <table>
+          <tr><th>Area</th><th>Purpose</th></tr>
+          <tr><td><strong>Choose folder</strong></td><td>Selects the destination folder. The current path is shown under the button.</td></tr>
+          <tr><td><strong>Choose format</strong></td><td>Toggle between <em>Audio</em> (MP3) and <em>Video</em> (MP4).</td></tr>
+          <tr><td><strong>Quality</strong></td><td>Three modes: <em>Best</em> (320 kbit/s or up to 8K), <em>Normal</em> (128 kbit/s or 480p), <em>Custom</em> (your choice in the drop-down list).</td></tr>
+          <tr><td><strong>Download</strong></td><td>The <em>Paste URL ⬇</em> button adds clipboard links to the list.</td></tr>
+        </table>
+        <p>
+          Below, the <strong>search bar</strong> accepts a video name, a URL, or several links on separate lines,
+          and the <strong>download list</strong> shows every job with its progress. The status line at the bottom
+          displays messages such as <em>Ready</em> or the number of queued items.
+        </p>
+        <h3>Custom quality values</h3>
+        <table>
+          <tr><th>Format</th><th>Available values</th></tr>
+          <tr><td>MP3 (audio)</td><td>320, 256, 192, 128, 96, 48, 36, 24 kbit/s</td></tr>
+          <tr><td>MP4 (video)</td><td>8K, 4K, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p</td></tr>
+        </table>
+        <div class="note">The chosen resolution is a maximum: if the video is not available in that quality, the closest lower one is used.</div>
+      </div>
+      <div data-lang="fr">
+        <h2>Fenêtre principale</h2>
+        <p>La fenêtre est organisée en quatre zones numérotées :</p>
+        <table>
+          <tr><th>Zone</th><th>Rôle</th></tr>
+          <tr><td><strong>Choose folder</strong></td><td>Sélectionne le dossier de destination. Le chemin actuel est affiché sous le bouton.</td></tr>
+          <tr><td><strong>Choose format</strong></td><td>Bascule entre <em>Audio</em> (MP3) et <em>Vidéo</em> (MP4).</td></tr>
+          <tr><td><strong>Quality</strong></td><td>Trois modes : <em>Best</em> (320 kbit/s ou jusqu'à 8K), <em>Normal</em> (128 kbit/s ou 480p), <em>Custom</em> (votre choix dans la liste déroulante).</td></tr>
+          <tr><td><strong>Download</strong></td><td>Le bouton <em>Paste URL ⬇</em> ajoute les liens du presse-papiers à la liste.</td></tr>
+        </table>
+        <p>
+          En dessous, la <strong>barre de recherche</strong> accepte un nom de vidéo, une URL ou plusieurs liens
+          sur des lignes séparées, et la <strong>liste des téléchargements</strong> affiche chaque tâche avec sa
+          progression. La ligne d'état en bas affiche des messages comme <em>Ready</em> ou le nombre d'éléments en file.
+        </p>
+        <h3>Valeurs de qualité personnalisée</h3>
+        <table>
+          <tr><th>Format</th><th>Valeurs disponibles</th></tr>
+          <tr><td>MP3 (audio)</td><td>320, 256, 192, 128, 96, 48, 36, 24 kbit/s</td></tr>
+          <tr><td>MP4 (vidéo)</td><td>8K, 4K, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p</td></tr>
+        </table>
+        <div class="note">La résolution choisie est un maximum : si la vidéo n'existe pas dans cette qualité, la qualité inférieure la plus proche est utilisée.</div>
+      </div>
+    </section>
+
+    <!-- ==================== DOWNLOAD ==================== -->
+    <section id="download">
+      <div data-lang="en">
+        <h2>Downloading media</h2>
+        <p>There are several ways to start a download:</p>
+        <ul>
+          <li><strong>Paste button / <kbd>Ctrl</kbd>+<kbd>V</kbd>:</strong> copies links from the clipboard. If the clipboard is empty, a box asks you to paste one or more links (one per line).</li>
+          <li><strong>Search bar:</strong> paste a URL directly in the search field and press <kbd>Enter</kbd>.</li>
+          <li><strong>Auto detection:</strong> when enabled, copied links and videos open in your browser are offered automatically (see <a href="#autodetect" style="color:var(--accent)">Auto detection</a>).</li>
+        </ul>
+        <h3>Supported links</h3>
+        <ul>
+          <li>Standard videos: <code>https://www.youtube.com/watch?v=…</code></li>
+          <li>Short links: <code>https://youtu.be/…</code></li>
+          <li>Shorts, YouTube Music and playlists.</li>
+        </ul>
+        <div class="warning">Other websites are not supported. If you paste a non-YouTube link, the status line reminds you that only YouTube links are accepted.</div>
+        <h3>Download speed limit</h3>
+        <p>
+          Click the speed button in the download list header to throttle new downloads:
+          250 KB/s, 500 KB/s, 1 MB/s, 2 MB/s, 4 MB/s or Unlimited. The limit only applies to
+          downloads started after the change.
+        </p>
+      </div>
+      <div data-lang="fr">
+        <h2>Télécharger des médias</h2>
+        <p>Plusieurs façons de lancer un téléchargement :</p>
+        <ul>
+          <li><strong>Bouton Paste / <kbd>Ctrl</kbd>+<kbd>V</kbd> :</strong> récupère les liens du presse-papiers. Si le presse-papiers est vide, une boîte vous invite à coller un ou plusieurs liens (un par ligne).</li>
+          <li><strong>Barre de recherche :</strong> collez une URL directement dans le champ de recherche et appuyez sur <kbd>Entrée</kbd>.</li>
+          <li><strong>Détection automatique :</strong> une fois activée, les liens copiés et les vidéos ouvertes dans votre navigateur sont proposés automatiquement (voir <a href="#autodetect" style="color:var(--accent)">Détection automatique</a>).</li>
+        </ul>
+        <h3>Liens pris en charge</h3>
+        <ul>
+          <li>Vidéos standard : <code>https://www.youtube.com/watch?v=…</code></li>
+          <li>Liens courts : <code>https://youtu.be/…</code></li>
+          <li>Shorts, YouTube Music et playlists.</li>
+        </ul>
+        <div class="warning">Les autres sites ne sont pas pris en charge. Si vous collez un lien non-YouTube, la ligne d'état rappelle que seuls les liens YouTube sont acceptés.</div>
+        <h3>Limite de vitesse</h3>
+        <p>
+          Cliquez sur le bouton de vitesse dans l'en-tête de la liste pour limiter les nouveaux téléchargements :
+          250 Ko/s, 500 Ko/s, 1 Mo/s, 2 Mo/s, 4 Mo/s ou illimité. La limite ne s'applique qu'aux
+          téléchargements lancés après le changement.
+        </p>
+      </div>
+    </section>
+
+    <!-- ==================== SEARCH ==================== -->
+    <section id="search">
+      <div data-lang="en">
+        <h2>Searching YouTube</h2>
+        <p>Type a video name in the search field, choose a mode, then press <kbd>Enter</kbd>:</p>
+        <table>
+          <tr><th>Mode</th><th>Behavior</th></tr>
+          <tr><td><strong>Most relevant</strong></td><td>Immediately downloads the most relevant result.</td></tr>
+          <tr><td><strong>View results</strong></td><td>Opens a list of matching videos; tick the ones you want and click <em>Download selected</em>.</td></tr>
+        </table>
+        <div class="tip">In the results window, use <em>Select all</em> / <em>Select none</em> to quickly change the selection. A search in progress can be interrupted with the <em>Cancel</em> button.</div>
+      </div>
+      <div data-lang="fr">
+        <h2>Rechercher sur YouTube</h2>
+        <p>Tapez un nom de vidéo dans le champ de recherche, choisissez un mode, puis appuyez sur <kbd>Entrée</kbd> :</p>
+        <table>
+          <tr><th>Mode</th><th>Comportement</th></tr>
+          <tr><td><strong>Most relevant</strong></td><td>Télécharge immédiatement le résultat le plus pertinent.</td></tr>
+          <tr><td><strong>View results</strong></td><td>Ouvre la liste des vidéos correspondantes ; cochez celles voulues et cliquez sur <em>Download selected</em>.</td></tr>
+        </table>
+        <div class="tip">Dans la fenêtre de résultats, utilisez <em>Select all</em> / <em>Select none</em> pour modifier rapidement la sélection. Une recherche en cours peut être interrompue avec le bouton <em>Cancel</em>.</div>
+      </div>
+    </section>
+
+    <!-- ==================== PLAYLISTS ==================== -->
+    <section id="playlists">
+      <div data-lang="en">
+        <h2>Playlists</h2>
+        <p>
+          When you add a link containing <code>list=</code> or <code>/playlist</code>, Media Harbor asks whether
+          you want to select entries before downloading:
+        </p>
+        <ul>
+          <li><strong>Yes:</strong> the playlist is read and a selector window lets you tick the videos to download.</li>
+          <li><strong>No:</strong> the whole playlist is queued as-is.</li>
+          <li><strong>Cancel:</strong> the link is ignored.</li>
+        </ul>
+        <div class="tip">Enable <em>Number playlist entries</em> in Settings to prefix file names with their position in the playlist (01, 02, …) — useful for albums.</div>
+      </div>
+      <div data-lang="fr">
+        <h2>Playlists</h2>
+        <p>
+          Quand vous ajoutez un lien contenant <code>list=</code> ou <code>/playlist</code>, Media Harbor demande
+          si vous souhaitez sélectionner les entrées avant le téléchargement :
+        </p>
+        <ul>
+          <li><strong>Oui :</strong> la playlist est lue et une fenêtre de sélection permet de cocher les vidéos à télécharger.</li>
+          <li><strong>Non :</strong> la playlist entière est mise en file telle quelle.</li>
+          <li><strong>Annuler :</strong> le lien est ignoré.</li>
+        </ul>
+        <div class="tip">Activez <em>Number playlist entries</em> dans les paramètres pour préfixer les noms de fichiers par leur position dans la playlist (01, 02, …) — pratique pour les albums.</div>
+      </div>
+    </section>
+
+    <!-- ==================== JOBS ==================== -->
+    <section id="jobs">
+      <div data-lang="en">
+        <h2>Download list</h2>
+        <p>Each entry shows the title, format/quality/folder details, a bright green progress bar and a status line. The action button changes with the state:</p>
+        <table>
+          <tr><th>State</th><th>Button</th><th>Effect</th></tr>
+          <tr><td>Downloading</td><td>Pause</td><td>Stops the download; the partial file is kept.</td></tr>
+          <tr><td>Paused</td><td>Resume</td><td>Restarts where it stopped.</td></tr>
+          <tr><td>Failed</td><td>Retry</td><td>Runs the download again.</td></tr>
+          <tr><td>Completed</td><td>Play</td><td>Opens the media file.</td></tr>
+        </table>
+        <p>Each entry also offers these actions (icons on the right):</p>
+        <ul>
+          <li><strong>Open folder:</strong> shows the file in Explorer (or opens the download folder).</li>
+          <li><strong>Copy link:</strong> copies the source URL to the clipboard.</li>
+          <li><strong>Subtitles:</strong> downloads subtitles separately — you are asked for a language code such as <code>en</code>, <code>fr</code> or <code>all</code>; files are converted to <code>.srt</code>.</li>
+          <li><strong>Remove:</strong> deletes the entry from the list (the downloaded file is kept).</li>
+        </ul>
+        <h3>Header buttons</h3>
+        <ul>
+          <li><strong>Resume all:</strong> resumes every paused or failed download.</li>
+          <li><strong>Clear:</strong> removes all completed entries from the list.</li>
+        </ul>
+        <div class="note">Up to 8 downloads can run simultaneously (configurable in Settings); the others wait for a free slot.</div>
+      </div>
+      <div data-lang="fr">
+        <h2>Liste des téléchargements</h2>
+        <p>Chaque entrée affiche le titre, les détails format/qualité/dossier, une barre de progression vert vif et un état. Le bouton d'action change selon l'état :</p>
+        <table>
+          <tr><th>État</th><th>Bouton</th><th>Effet</th></tr>
+          <tr><td>En cours</td><td>Pause</td><td>Interrompt le téléchargement ; le fichier partiel est conservé.</td></tr>
+          <tr><td>En pause</td><td>Resume</td><td>Reprend là où il s'était arrêté.</td></tr>
+          <tr><td>Échec</td><td>Retry</td><td>Relance le téléchargement.</td></tr>
+          <tr><td>Terminé</td><td>Play</td><td>Ouvre le fichier média.</td></tr>
+        </table>
+        <p>Chaque entrée propose aussi ces actions (icônes à droite) :</p>
+        <ul>
+          <li><strong>Ouvrir le dossier :</strong> affiche le fichier dans l'Explorateur (ou ouvre le dossier de téléchargement).</li>
+          <li><strong>Copier le lien :</strong> copie l'URL source dans le presse-papiers.</li>
+          <li><strong>Sous-titres :</strong> télécharge les sous-titres séparément — un code langue vous est demandé, par ex. <code>en</code>, <code>fr</code> ou <code>all</code> ; les fichiers sont convertis en <code>.srt</code>.</li>
+          <li><strong>Supprimer :</strong> retire l'entrée de la liste (le fichier téléchargé est conservé).</li>
+        </ul>
+        <h3>Boutons d'en-tête</h3>
+        <ul>
+          <li><strong>Resume all :</strong> reprend tous les téléchargements en pause ou en échec.</li>
+          <li><strong>Clear :</strong> retire toutes les entrées terminées de la liste.</li>
+        </ul>
+        <div class="note">Jusqu'à 8 téléchargements simultanés (configurable dans les paramètres) ; les autres attendent qu'un emplacement se libère.</div>
+      </div>
+    </section>
+
+    <!-- ==================== MENU ==================== -->
+    <section id="menu">
+      <div data-lang="en">
+        <h2>Menu &amp; tools</h2>
+        <p>Click the <strong>⌄</strong> button next to the title to open the application menu.</p>
+        <h3>History</h3>
+        <p>Lists every completed download with its date. From the history you can replay the file, reveal it in Explorer, copy its link or clear the history.</p>
+        <h3>Convert a file</h3>
+        <p>
+          Converts a local media file (mp3, mp4, wav, m4a, aac, webm, mkv, avi, flv, wmv, mov, ogg) to the
+          currently selected format (MP3 or MP4) and quality. Choose the source file, then the output file.
+        </p>
+        <h3>Trim audio</h3>
+        <p>
+          Extracts part of an audio file to MP3. After choosing the file and the output, enter a
+          <strong>start time</strong> and a <strong>duration</strong>, either in seconds (<code>90</code>) or as
+          <code>hh:mm:ss</code> (<code>00:01:30</code>). The selected audio bitrate applies.
+        </p>
+        <h3>Settings</h3>
+        <p>Opens the settings dialog — see the next section.</p>
+        <h3>Help</h3>
+        <p>Displays a built-in summary of the application features.</p>
+      </div>
+      <div data-lang="fr">
+        <h2>Menu &amp; outils</h2>
+        <p>Cliquez sur le bouton <strong>⌄</strong> à côté du titre pour ouvrir le menu de l'application.</p>
+        <h3>History (Historique)</h3>
+        <p>Liste tous les téléchargements terminés avec leur date. Depuis l'historique, vous pouvez relire le fichier, l'afficher dans l'Explorateur, copier son lien ou vider l'historique.</p>
+        <h3>Convert a file (Convertir un fichier)</h3>
+        <p>
+          Convertit un fichier média local (mp3, mp4, wav, m4a, aac, webm, mkv, avi, flv, wmv, mov, ogg) vers le
+          format actuellement sélectionné (MP3 ou MP4) et la qualité choisie. Choisissez le fichier source, puis le fichier de sortie.
+        </p>
+        <h3>Trim audio (Découper l'audio)</h3>
+        <p>
+          Extrait une partie d'un fichier audio en MP3. Après avoir choisi le fichier et la sortie, saisissez un
+          <strong>temps de départ</strong> et une <strong>durée</strong>, en secondes (<code>90</code>) ou au format
+          <code>hh:mm:ss</code> (<code>00:01:30</code>). Le débit audio sélectionné s'applique.
+        </p>
+        <h3>Settings (Paramètres)</h3>
+        <p>Ouvre la boîte de paramètres — voir la section suivante.</p>
+        <h3>Help (Aide)</h3>
+        <p>Affiche un résumé intégré des fonctionnalités de l'application.</p>
+      </div>
+    </section>
+
+    <!-- ==================== SETTINGS ==================== -->
+    <section id="settings">
+      <div data-lang="en">
+        <h2>Settings</h2>
+        <table>
+          <tr><th>Option</th><th>Description</th></tr>
+          <tr><td><strong>Embed artwork in MP3 / M4A files</strong></td><td>Adds the video thumbnail as cover art inside audio files.</td></tr>
+          <tr><td><strong>Number playlist entries</strong></td><td>Prefixes file names with the playlist position.</td></tr>
+          <tr><td><strong>Save English and French subtitles when available</strong></td><td>Downloads <code>.srt</code> subtitles alongside the media.</td></tr>
+          <tr><td><strong>Detect media in the active browser</strong></td><td>Also checks the URL currently open in your browser (requires Auto detect).</td></tr>
+          <tr><td><strong>Simultaneous downloads (1–8)</strong></td><td>How many downloads may run at the same time.</td></tr>
+          <tr><td><strong>CPU threads used for conversion</strong></td><td>Threads given to FFmpeg during conversion.</td></tr>
+          <tr><td><strong>Proxy URL</strong></td><td>Optional proxy, e.g. <code>http://127.0.0.1:8080</code>.</td></tr>
+          <tr><td><strong>YouTube cookies file</strong></td><td>A cookies file in Netscape format, used to access videos that require sign-in (age-restricted, members-only). Use a browser extension such as «Get cookies.txt» to export it.</td></tr>
+        </table>
+        <div class="note">Settings are saved automatically when the dialog closes and are kept in <code>data\settings.json</code>.</div>
+      </div>
+      <div data-lang="fr">
+        <h2>Paramètres</h2>
+        <table>
+          <tr><th>Option</th><th>Description</th></tr>
+          <tr><td><strong>Embed artwork in MP3 / M4A files</strong></td><td>Intègre la miniature de la vidéo comme pochette dans les fichiers audio.</td></tr>
+          <tr><td><strong>Number playlist entries</strong></td><td>Préfixe les noms de fichiers par la position dans la playlist.</td></tr>
+          <tr><td><strong>Save English and French subtitles when available</strong></td><td>Télécharge les sous-titres <code>.srt</code> en même temps que le média.</td></tr>
+          <tr><td><strong>Detect media in the active browser</strong></td><td>Vérifie aussi l'URL ouverte dans votre navigateur (nécessite la détection automatique).</td></tr>
+          <tr><td><strong>Simultaneous downloads (1–8)</strong></td><td>Nombre de téléchargements pouvant s'exécuter en même temps.</td></tr>
+          <tr><td><strong>CPU threads used for conversion</strong></td><td>Nombre de threads alloués à FFmpeg pendant la conversion.</td></tr>
+          <tr><td><strong>Proxy URL</strong></td><td>Proxy optionnel, ex. <code>http://127.0.0.1:8080</code>.</td></tr>
+          <tr><td><strong>YouTube cookies file</strong></td><td>Fichier de cookies au format Netscape, utilisé pour les vidéos nécessitant une connexion (restriction d'âge, contenu membres). Utilisez une extension navigateur comme « Get cookies.txt » pour l'exporter.</td></tr>
+        </table>
+        <div class="note">Les paramètres sont enregistrés automatiquement à la fermeture de la boîte et conservés dans <code>data\settings.json</code>.</div>
+      </div>
+    </section>
+
+    <!-- ==================== AUTODETECT ==================== -->
+    <section id="autodetect">
+      <div data-lang="en">
+        <h2>Auto detection</h2>
+        <p>
+          The <strong>Auto detect</strong> checkbox (search bar area) watches your clipboard once per second.
+          When you copy a valid YouTube link, a dialog offers to download it.
+        </p>
+        <p>
+          If <em>Detect media in the active browser</em> is also enabled in Settings, Media Harbor additionally
+          watches the URL open in your browser and offers to download the video you are watching.
+        </p>
+        <div class="tip">Each link is only offered once in a row: copying the same link again does not trigger a new prompt until a different text is copied.</div>
+      </div>
+      <div data-lang="fr">
+        <h2>Détection automatique</h2>
+        <p>
+          La case <strong>Auto detect</strong> (zone de la barre de recherche) surveille votre presse-papiers
+          chaque seconde. Quand vous copiez un lien YouTube valide, une boîte de dialogue propose de le télécharger.
+        </p>
+        <p>
+          Si <em>Detect media in the active browser</em> est aussi activé dans les paramètres, Media Harbor
+          surveille en plus l'URL ouverte dans votre navigateur et propose de télécharger la vidéo que vous regardez.
+        </p>
+        <div class="tip">Chaque lien n'est proposé qu'une fois d'affilée : copier le même lien à nouveau ne déclenche pas de nouvelle invite tant qu'un texte différent n'a pas été copié.</div>
+      </div>
+    </section>
+
+    <!-- ==================== SHORTCUTS ==================== -->
+    <section id="shortcuts">
+      <div data-lang="en">
+        <h2>Keyboard shortcuts</h2>
+        <table>
+          <tr><th>Shortcut</th><th>Action</th></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Paste link(s) from the clipboard and start downloading</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Focus the search field</td></tr>
+          <tr><td><kbd>Enter</kbd> (in the search field)</td><td>Search or add the entered link(s)</td></tr>
+        </table>
+      </div>
+      <div data-lang="fr">
+        <h2>Raccourcis clavier</h2>
+        <table>
+          <tr><th>Raccourci</th><th>Action</th></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Coller le(s) lien(s) du presse-papiers et lancer le téléchargement</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>F</kbd></td><td>Donner le focus au champ de recherche</td></tr>
+          <tr><td><kbd>Entrée</kbd> (dans le champ de recherche)</td><td>Rechercher ou ajouter le(s) lien(s) saisi(s)</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== FAQ ==================== -->
+    <section id="faq">
+      <div data-lang="en">
+        <h2>FAQ &amp; troubleshooting</h2>
+
+        <h3>The status says "Paste a YouTube link…"</h3>
+        <p>Only youtube.com and youtu.be URLs are accepted. Check that the link is complete and starts with <code>https://</code>.</p>
+
+        <h3>A download fails immediately</h3>
+        <p>
+          The video may be unavailable, private, age-restricted or region-locked. For videos that require sign-in,
+          provide a cookies file in Settings. Also check your internet connection and, if you use one, your proxy settings.
+        </p>
+
+        <h3>Downloads are stuck in "Waiting for a download slot…"</h3>
+        <p>All parallel slots are busy. Wait for a download to finish or raise <em>Simultaneous downloads</em> in Settings (up to 8).</p>
+
+        <h3>Conversion seems slow</h3>
+        <p>Increase <em>CPU threads used for conversion</em> in Settings. High resolutions (4K/8K) naturally take longer to download and merge.</p>
+
+        <h3>Where are my files?</h3>
+        <p>
+          In the folder chosen in step 1 (defaults to <em>Music</em>). Use the folder icon on any completed entry
+          to reveal the file in Explorer. Downloaded files are never deleted by the application.
+        </p>
+
+        <h3>Can I get subtitles only, without the video?</h3>
+        <p>Yes — use the subtitles action on any list entry and enter a language code (<code>en</code>, <code>fr</code>, <code>all</code>). Subtitles are saved as <code>.srt</code> in the download folder.</p>
+
+        <h3>Legal notice</h3>
+        <p>Media Harbor relies on yt-dlp and FFmpeg, distributed under their own licenses (see <code>THIRD-PARTY-NOTICES.md</code>). Downloading content may be subject to YouTube's Terms of Service and local copyright law; it is your responsibility to comply with them.</p>
+      </div>
+      <div data-lang="fr">
+        <h2>FAQ &amp; dépannage</h2>
+
+        <h3>L'état indique « Paste a YouTube link… »</h3>
+        <p>Seules les URL youtube.com et youtu.be sont acceptées. Vérifiez que le lien est complet et commence par <code>https://</code>.</p>
+
+        <h3>Un téléchargement échoue immédiatement</h3>
+        <p>
+          La vidéo est peut-être indisponible, privée, soumise à restriction d'âge ou bloquée par région. Pour les
+          vidéos nécessitant une connexion, fournissez un fichier de cookies dans les paramètres. Vérifiez aussi
+          votre connexion internet et, le cas échéant, vos paramètres de proxy.
+        </p>
+
+        <h3>Les téléchargements restent en « Waiting for a download slot… »</h3>
+        <p>Tous les emplacements parallèles sont occupés. Attendez la fin d'un téléchargement ou augmentez <em>Simultaneous downloads</em> dans les paramètres (jusqu'à 8).</p>
+
+        <h3>La conversion semble lente</h3>
+        <p>Augmentez <em>CPU threads used for conversion</em> dans les paramètres. Les hautes résolutions (4K/8K) prennent naturellement plus de temps à télécharger et assembler.</p>
+
+        <h3>Où sont mes fichiers ?</h3>
+        <p>
+          Dans le dossier choisi à l'étape 1 (<em>Musique</em> par défaut). Utilisez l'icône dossier sur toute entrée
+          terminée pour afficher le fichier dans l'Explorateur. Les fichiers téléchargés ne sont jamais supprimés par l'application.
+        </p>
+
+        <h3>Puis-je récupérer uniquement les sous-titres, sans la vidéo ?</h3>
+        <p>Oui — utilisez l'action sous-titres sur n'importe quelle entrée de la liste et saisissez un code langue (<code>en</code>, <code>fr</code>, <code>all</code>). Les sous-titres sont enregistrés en <code>.srt</code> dans le dossier de téléchargement.</p>
+
+        <h3>Mention légale</h3>
+        <p>Media Harbor s'appuie sur yt-dlp et FFmpeg, distribués sous leurs propres licences (voir <code>THIRD-PARTY-NOTICES.md</code>). Le téléchargement de contenu peut être soumis aux conditions d'utilisation de YouTube et au droit d'auteur local ; il vous appartient de les respecter.</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <span data-lang-inline="en">Media Harbor — powered by yt-dlp, FFmpeg and CommunityToolkit.Mvvm.</span>
+  <span data-lang-inline="fr">Media Harbor — propulsé par yt-dlp, FFmpeg et CommunityToolkit.Mvvm.</span>
+</footer>
+
+<script>
+  function setLang(lang) {
+    document.documentElement.lang = lang;
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+    document.getElementById('btn-fr').classList.toggle('active', lang === 'fr');
+    try { localStorage.setItem('mh-doc-lang', lang); } catch (e) {}
+    var hash = location.hash;
+    if (hash) { var el = document.querySelector(hash); if (el) el.scrollIntoView(); }
+  }
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('mh-doc-lang'); } catch (e) {}
+    setLang(saved || 'fr');
+  })();
+  var links = document.querySelectorAll('#toc a');
+  var sections = document.querySelectorAll('main section');
+  window.addEventListener('scroll', function () {
+    var current = sections[0];
+    sections.forEach(function (s) { if (window.scrollY >= s.offsetTop - 90) current = s; });
+    links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + current.id); });
+  });
+</script>
+
+</body>
+</html>

@@ -288,7 +288,7 @@
                                                 <StackPanel Grid.Column="1" Margin="7,0,8,0">
                                                     <TextBlock Text="{Binding Title}" Foreground="#145078" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Url}" />
                                                     <TextBlock Text="{Binding Detail}" Foreground="#667F90" FontSize="10" TextTrimming="CharacterEllipsis" ToolTip="{Binding Detail}" Margin="0,3" />
-                                                    <ProgressBar Height="7" Value="{Binding Progress}" Maximum="100" Foreground="#22A7CD" />
+                                                    <ProgressBar Height="7" Value="{Binding Progress}" Maximum="100" Foreground="#2FD351" />
                                                     <TextBlock Text="{Binding Status}" Foreground="#3B7D9D" FontSize="10" Margin="0,3,0,0" TextWrapping="Wrap" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="2">
