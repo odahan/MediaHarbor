@@ -16,8 +16,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly HashSet<DownloadDestination> activeDestinations = new(DownloadDestination.Comparer);
     private readonly DispatcherTimer clipboardTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private string previousClipboard = "";
-    private string previousBrowser = "";
-    private bool browserProbeRunning;
     private bool loading = true;
     public event Action? SearchRequested;
     public ObservableCollection<DownloadJob> Jobs { get; } = [];
@@ -46,7 +44,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public bool Numbering { get; set; }
     public bool Artwork { get; set; } = true;
     public bool IncludeSubtitles { get; set; }
-    public bool BrowserDetect { get; set; }
     public int Parallel { get; set; } = Math.Min(8, Environment.ProcessorCount * 2);
     public int FfmpegThreads { get; set; } = Math.Max(1, Environment.ProcessorCount / 2);
     public string Proxy { get; set; } = "";
@@ -168,7 +165,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void CheckClipboard()
     {
         if (!AutoDetect || detectionPromptOpen) return;
-        if (BrowserDetect && !browserProbeRunning) _ = CheckBrowserAsync();
         try
         {
             var text = Clipboard.ContainsText() ? Clipboard.GetText().Trim() : "";
@@ -178,20 +174,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 _ = AddTextAsync(text);
         }
         catch (System.Runtime.InteropServices.COMException) { }
-    }
-
-    private async Task CheckBrowserAsync()
-    {
-        browserProbeRunning = true;
-        try
-        {
-            var url = await Task.Run(BrowserDetection.CurrentUrl);
-            if (!AutoDetect || detectionPromptOpen || url == null || url == previousBrowser) return;
-            previousBrowser = url;
-            if (ConfirmDetection("Download the media open in your browser?", url))
-                await AddTextAsync(url);
-        }
-        finally { browserProbeRunning = false; }
     }
 
     private bool ConfirmDetection(string message, string url)
@@ -353,7 +335,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (screenshotMode || loading) return;
         try
         {
-            storage.SaveSettings(new SavedSettings(Folder, VideoFormat, AudioFormat, IsAudio, QualityMode, CustomQuality, SpeedLimit, AutoDetect, Parallel, Numbering, Artwork, IncludeSubtitles, Proxy, Cookies, BrowserDetect, FfmpegThreads));
+            storage.SaveSettings(new SavedSettings(Folder, VideoFormat, AudioFormat, IsAudio, QualityMode, CustomQuality, SpeedLimit, AutoDetect, Parallel, Numbering, Artwork, IncludeSubtitles, Proxy, Cookies, FfmpegThreads));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Notice = "Settings could not be saved: " + ex.Message; }
     }
@@ -366,7 +348,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 Folder = s.Folder; VideoFormat = "mp4"; AudioFormat = "mp3"; IsAudio = s.IsAudio; CustomQuality = s.CustomQuality; QualityMode = s.QualityMode;
                 SpeedLimit = s.SpeedLimit; AutoDetect = s.AutoDetect; Parallel = Math.Clamp(s.Parallel, 1, 8); Numbering = s.Numbering; Artwork = s.Artwork; IncludeSubtitles = s.Subtitles; Proxy = s.Proxy; Cookies = s.Cookies;
-                BrowserDetect = s.BrowserDetect;
                 if (s.FfmpegThreads is > 0) FfmpegThreads = Math.Clamp(s.FfmpegThreads.Value, 1, Environment.ProcessorCount);
                 ApplyParallel();
             }
@@ -382,6 +363,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void Dispose() { clipboardTimer.Stop(); foreach (var job in Jobs) job.Stop(); Save(); }
 }
 
-public sealed record SavedSettings(string Folder, string VideoFormat, string AudioFormat, bool IsAudio, string QualityMode, string CustomQuality, string SpeedLimit, bool AutoDetect, int Parallel, bool Numbering, bool Artwork, bool Subtitles, string Proxy, string Cookies, bool BrowserDetect = false, int? FfmpegThreads = null);
+public sealed record SavedSettings(string Folder, string VideoFormat, string AudioFormat, bool IsAudio, string QualityMode, string CustomQuality, string SpeedLimit, bool AutoDetect, int Parallel, bool Numbering, bool Artwork, bool Subtitles, string Proxy, string Cookies, int? FfmpegThreads = null);
 public sealed record HistoryEntry(string Title, string Url, string File, DateTime Date);
 

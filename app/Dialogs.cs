@@ -161,12 +161,24 @@ public static class Dialogs
     {
         var window = Window("Settings", 540, 560);
         var panel = new StackPanel { Margin = new Thickness(22) };
-        panel.Children.Add(new TextBlock { Text = "Downloads", FontSize = 19, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 13) });
+        var startup = Check("Start MediaHarbor with Windows", false);
+        try
+        {
+            startup.IsChecked = WindowsStartup.IsRegistered();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            startup.IsEnabled = false;
+            startup.ToolTip = $"Could not read the Windows startup setting. {ex.Message}";
+            ToolTipService.SetShowOnDisabled(startup, true);
+        }
+        var wasRegistered = startup.IsChecked == true;
+        panel.Children.Add(startup);
+        panel.Children.Add(new TextBlock { Text = "Downloads", FontSize = 19, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 8) });
         var artwork = Check("Embed artwork in MP3 / M4A files", vm.Artwork);
         var numbering = Check("Number playlist entries", vm.Numbering);
         var subtitles = Check("Save English and French subtitles when available", vm.IncludeSubtitles);
-        var browser = Check("Detect media in the active browser", vm.BrowserDetect);
-        panel.Children.Add(artwork); panel.Children.Add(numbering); panel.Children.Add(subtitles); panel.Children.Add(browser);
+        panel.Children.Add(artwork); panel.Children.Add(numbering); panel.Children.Add(subtitles);
         panel.Children.Add(new TextBlock { Text = "Simultaneous downloads (1–8)", Margin = new Thickness(0, 14, 0, 5) });
         var parallel = new ComboBox { ItemsSource = Enumerable.Range(1, 8).ToArray(), SelectedItem = vm.Parallel };
         panel.Children.Add(parallel);
@@ -188,8 +200,22 @@ public static class Dialogs
         {
             if (cookies.Text.Length > 0 && !File.Exists(cookies.Text)) { MessageBox.Show("Choose an existing cookies file."); return; }
             if (proxy.Text.Length > 0 && !Uri.TryCreate(proxy.Text, UriKind.Absolute, out _)) { MessageBox.Show("Enter a valid proxy URL."); return; }
+            var startWithWindows = startup.IsChecked == true;
+            if (startup.IsEnabled && startWithWindows != wasRegistered)
+            {
+                try
+                {
+                    WindowsStartup.SetRegistered(startWithWindows);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+                {
+                    MessageBox.Show(window, $"Could not update the Windows startup setting.\n\n{ex.Message}",
+                        "MediaHarbor", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+            }
             vm.Artwork = artwork.IsChecked == true; vm.Numbering = numbering.IsChecked == true; vm.IncludeSubtitles = subtitles.IsChecked == true;
-            vm.BrowserDetect = browser.IsChecked == true; vm.Parallel = (int)parallel.SelectedItem; vm.FfmpegThreads = (int)threads.SelectedItem;
+            vm.Parallel = (int)parallel.SelectedItem; vm.FfmpegThreads = (int)threads.SelectedItem;
             vm.ApplyParallel(); vm.Proxy = proxy.Text.Trim(); vm.Cookies = cookies.Text.Trim(); window.DialogResult = true;
         };
         panel.Children.Add(save);
