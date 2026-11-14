@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>MediaHarbor</AssemblyName>
+    <ApplicationIcon>Assets\MediaHarbor.ico</ApplicationIcon>
     <Version>1.0.3</Version>
     <AssemblyVersion>1.0.3.0</AssemblyVersion>
     <FileVersion>1.0.3.0</FileVersion>
@@ -20,6 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <Resource Include="$(ApplicationIcon)" />
     <EmbeddedResource Include="docs\MediaHarborGuide.html" LogicalName="MediaHarbor.Distribution.MediaHarborGuide.html" />
     <Content Include="tools\*.exe;tools\*.txt" CopyToOutputDirectory="PreserveNewest" Condition="'$(PublishSingleFile)' != 'true'" />
     <EmbeddedResource Include="..\LICENSE;THIRD-PARTY-NOTICES.md;licenses\*.txt"
