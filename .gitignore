@@ -65,6 +65,16 @@ project.lock.json
 project.fragment.lock.json
 artifacts/
 
+# Executables, compiled libraries, and binary distribution archives
+*.[Ee][Xx][Ee]
+*.[Dd][Ll][Ll]
+*.[Ll][Ii][Bb]
+*.[Ss][Oo]
+*.dylib
+*.[Zz][Ii][Pp]
+*.7z
+[Pp]ublish/
+
 # Tye
 .tye/
 
@@ -184,8 +194,6 @@ DocProject/Help/*.hhp
 DocProject/Help/Html2
 DocProject/Help/html
 
-# Click-Once directory
-publish/
 
 # Publish Web Output
 *.[Pp]ublish.xml
