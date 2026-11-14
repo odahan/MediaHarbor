@@ -15,6 +15,54 @@ public static class Dialogs
         FontFamily = new System.Windows.Media.FontFamily("Segoe UI"), FontSize = 13, MinWidth = 340, MinHeight = 180
     };
 
+    /// <summary>Shows application information and an entry point to the local guide.</summary>
+    internal static void About(System.Windows.Input.ICommand helpCommand)
+    {
+        var window = Window("About MediaHarbor", 400, 220);
+        window.ResizeMode = ResizeMode.NoResize;
+        var version = typeof(Dialogs).Assembly.GetName().Version?.ToString(3);
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(new TextBlock { Text = "MediaHarbor", FontSize = 22, FontWeight = FontWeights.Bold });
+        panel.Children.Add(new TextBlock { Text = $"Version {version}", Margin = new Thickness(0, 4, 0, 12) });
+        panel.Children.Add(new TextBlock { Text = "Powered by yt-dlp, FFmpeg and CommunityToolkit.Mvvm.", TextWrapping = TextWrapping.Wrap });
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) };
+        buttons.Children.Add(new Button { Content = "Help", Command = helpCommand, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) });
+        var close = new Button { Content = "Close", IsCancel = true, IsDefault = true, MinWidth = 75 };
+        buttons.Children.Add(close);
+        panel.Children.Add(buttons);
+        window.Content = panel;
+        window.ShowDialog();
+    }
+
+    /// <summary>Prompts for a detected link above other applications.</summary>
+    internal static bool ConfirmDetectedMedia(string message, string url)
+    {
+        var window = Window("Media detected", 440, 200);
+        window.Topmost = true;
+        window.ShowActivated = true;
+        window.ShowInTaskbar = false;
+        window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        window.SizeToContent = SizeToContent.Height;
+        window.ResizeMode = ResizeMode.NoResize;
+        window.ContentRendered += (_, _) => window.Activate();
+
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock { Text = url, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) });
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) };
+        var yes = new Button { Content = "Yes", MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
+        yes.Click += (_, _) => window.DialogResult = true;
+        var no = new Button { Content = "No", MinWidth = 75, IsCancel = true, IsDefault = true };
+        buttons.Children.Add(yes);
+        buttons.Children.Add(no);
+        panel.Children.Add(buttons);
+        window.Content = panel;
+        window.Loaded += (_, _) => no.Focus();
+        return window.ShowDialog() == true;
+    }
+
     public static string? Prompt(string title, string label, string initial)
     {
         var window = Window(title);

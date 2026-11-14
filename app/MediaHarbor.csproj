@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net11.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -20,8 +20,11 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <Content Include="tools\*.exe" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="tools\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="docs\MediaHarborGuide.html" LogicalName="MediaHarbor.Distribution.MediaHarborGuide.html" />
+    <Content Include="tools\*.exe;tools\*.txt" CopyToOutputDirectory="PreserveNewest" Condition="'$(PublishSingleFile)' != 'true'" />
+    <EmbeddedResource Include="tools\ffmpeg.exe;tools\yt-dlp.exe;tools\LICENSE-FFmpeg.txt;tools\LICENSE-yt-dlp.txt;THIRD-PARTY-NOTICES.md"
+                      LogicalName="MediaHarbor.Distribution.%(Filename)%(Extension)"
+                      Condition="'$(PublishSingleFile)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
     <None Include="MediaHarbor.Tests\MediaHarbor.Tests.csproj" />

@@ -10,9 +10,21 @@ namespace MediaHarbor;
 
 public partial class App : Application
 {
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        try
+        {
+            await DistributionFiles.ExtractAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show($"MediaHarbor could not prepare its files in {DistributionFiles.ApplicationDirectory}.\n\n{ex.Message}",
+                "MediaHarbor", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
+
         if (e.Args.Contains("--self-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -60,7 +72,7 @@ public partial class App : Application
         try { await EngineSelfTest.RunAsync(); Shutdown(0); }
         catch (Exception ex)
         {
-            File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "self-test-failure.txt"), ex.ToString());
+            File.WriteAllText(Path.Combine(DistributionFiles.ApplicationDirectory, "self-test-failure.txt"), ex.ToString());
             Shutdown(1);
         }
     }

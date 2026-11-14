@@ -11,7 +11,7 @@ public static class EngineSelfTest
     /// <summary>Exercises a real local HTTP download, audio conversion, progress and history.</summary>
     public static async Task RunAsync()
     {
-        var folder = Path.Combine(AppContext.BaseDirectory, "self-test", Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(DistributionFiles.ApplicationDirectory, "self-test", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         var source = Path.Combine(folder, "source.wav");
         var errors = new List<string>();
@@ -66,7 +66,7 @@ public static class EngineSelfTest
             var trim = Path.Combine(folder, "trimmed.mp3");
             await LocalConversion.RunAsync(trim, ["-nostdin", "-n", "-ss", "1", "-t", "1", "-i", job.FilePath, "-vn", "-b:a", "128k"], false, DownloadEngine.RunAsync, cancellation.Token);
             Require(new FileInfo(trim).Length > 1000, "Audio trim saved");
-            await File.WriteAllTextAsync(Path.Combine(AppContext.BaseDirectory, "self-test-report.json"), JsonSerializer.Serialize(new { passed = true, checks = new[] { "source generation", "audio/video default quality", "best quality", "safe argument handling", "progress", "HTTP audio download", "HTTP video download", "maximum video height", "MP3 conversion", "completion", "history", "audio trimming" }, output = job.FilePath }, new JsonSerializerOptions { WriteIndented = true }));
+            await File.WriteAllTextAsync(Path.Combine(DistributionFiles.ApplicationDirectory, "self-test-report.json"), JsonSerializer.Serialize(new { passed = true, checks = new[] { "source generation", "audio/video default quality", "best quality", "safe argument handling", "progress", "HTTP audio download", "HTTP video download", "maximum video height", "MP3 conversion", "completion", "history", "audio trimming" }, output = job.FilePath }, new JsonSerializerOptions { WriteIndented = true }));
         }
         finally
         {

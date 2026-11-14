@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
@@ -163,16 +163,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
         finally { busy.Close(); }
     }
 
+    private bool detectionPromptOpen;
+
     private void CheckClipboard()
     {
-        if (!AutoDetect) return;
+        if (!AutoDetect || detectionPromptOpen) return;
         if (BrowserDetect && !browserProbeRunning) _ = CheckBrowserAsync();
         try
         {
             var text = Clipboard.ContainsText() ? Clipboard.GetText().Trim() : "";
             if (text == previousClipboard) return;
             previousClipboard = text;
-            if (MediaLogic.IsValidDownloadUrl(text) && MessageBox.Show("Download this copied link?\n\n" + text, "Media detected", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes) _ = AddTextAsync(text);
+            if (MediaLogic.IsValidDownloadUrl(text) && ConfirmDetection("Download this copied link?", text))
+                _ = AddTextAsync(text);
         }
         catch (System.Runtime.InteropServices.COMException) { }
     }
@@ -183,11 +186,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var url = await Task.Run(BrowserDetection.CurrentUrl);
-            if (url == null || url == previousBrowser) return;
+            if (!AutoDetect || detectionPromptOpen || url == null || url == previousBrowser) return;
             previousBrowser = url;
-            if (MessageBox.Show("Download the media open in your browser?\n\n" + url, "Media detected", MessageBoxButton.YesNo) == MessageBoxResult.Yes) await AddTextAsync(url);
+            if (ConfirmDetection("Download the media open in your browser?", url))
+                await AddTextAsync(url);
         }
         finally { browserProbeRunning = false; }
+    }
+
+    private bool ConfirmDetection(string message, string url)
+    {
+        detectionPromptOpen = true;
+        try { return Dialogs.ConfirmDetectedMedia(message, url); }
+        finally { detectionPromptOpen = false; }
     }
 
     public void ApplyParallel() => Slots.SetLimit(Parallel);
@@ -237,32 +248,61 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         var language = Dialogs.Prompt("Subtitles", "Language code, such as en, fr, or all:", "en");
         if (language == null) return;
-        var args = new List<string> { "--ignore-config", "--skip-download", "--no-playlist", "--write-subs", "--write-auto-subs", "--sub-langs", language, "--convert-subs", "srt", "--ffmpeg-location", DownloadEngine.Tool("ffmpeg"), "-P", options.Folder, "-o", DownloadEngine.OutputTemplate(options) };
+        var args = new List<string>
+        {
+            "--ignore-config", "--skip-download", "--no-playlist",
+            "--write-subs", "--write-auto-subs", "--sub-langs", language, "--convert-subs", "srt",
+            "--ffmpeg-location", DownloadEngine.Tool("ffmpeg"),
+            "-P", options.Folder, "-o", DownloadEngine.OutputTemplate(options)
+        };
         if (!string.IsNullOrWhiteSpace(options.Proxy)) args.AddRange(["--proxy", options.Proxy]);
         if (!string.IsNullOrWhiteSpace(options.Cookies)) args.AddRange(["--cookies", options.Cookies]);
         args.AddRange(["--", url]);
         await RunUtilityAsync("Downloading subtitles…", async token =>
         {
-            var errors = new Queue<string>();
-            var code = await RunProcess(DownloadEngine.StartInfo("yt-dlp", args), _ => { }, _ => { }, line =>
+            var noSubtitles = false;
+            var rateLimited = false;
+            var code = await RunProcess(DownloadEngine.StartInfo("yt-dlp", args), _ => { }, line =>
             {
-                if (errors.Count == 3) errors.Dequeue();
-                errors.Enqueue(line);
+                noSubtitles |= line.Contains("There are no subtitles for the requested languages", StringComparison.OrdinalIgnoreCase);
+            }, line =>
+            {
+                rateLimited |= line.Contains("HTTP Error 429", StringComparison.OrdinalIgnoreCase)
+                    || line.Contains("429: Too Many Requests", StringComparison.OrdinalIgnoreCase);
             }, token);
+
             if (code != 0)
-                throw new IOException(string.Join(Environment.NewLine, errors.DefaultIfEmpty($"yt-dlp exited with code {code}.")));
+            {
+                var message = rateLimited
+                    ? "YouTube is temporarily limiting subtitle downloads. Please try again later."
+                    : "Could not download subtitles. Check that the video is still available on YouTube and try again.";
+                throw new IOException(message);
+            }
+
+            if (!noSubtitles)
+                return "Subtitles are ready in your download folder.";
+
+            return language.Equals("all", StringComparison.OrdinalIgnoreCase)
+                ? "No subtitles were found for this video."
+                : $"No subtitles were found for this video in the selected language ({language}). Try another language or choose all.";
         });
     }
 
-    private async Task RunUtilityAsync(string title, Func<CancellationToken, Task> execute)
+    private Task RunUtilityAsync(string title, Func<CancellationToken, Task> execute) =>
+        RunUtilityAsync(title, async token =>
+        {
+            await execute(token);
+            return "Finished · output saved";
+        });
+
+    private async Task RunUtilityAsync(string title, Func<CancellationToken, Task<string>> execute)
     {
         using var cancellation = new CancellationTokenSource();
         var busy = Dialogs.Busy(title, cancellation);
         busy.Show();
         try
         {
-            await execute(cancellation.Token);
-            Notice = "Finished · output saved";
+            Notice = await execute(cancellation.Token);
             MessageBox.Show(Notice, "Completed");
         }
         catch (OperationCanceledException) { Notice = "Cancelled"; }
@@ -271,7 +311,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void Help() => MessageBox.Show("Choose a folder, select audio or video and a quality, then paste a YouTube link.\n\nSearch YouTube by name or choose View results. Playlist links offer an entry selector. Each download has pause/resume, retry, subtitles and folder actions.\n\nThe menu offers history, file conversion and audio trimming. Auto detect offers downloads when you copy a link. Settings accept a proxy and a Netscape cookies file for YouTube sign-in.\n\nMP4 video and MP3 audio are available. Best, Normal and Custom control video resolution or MP3 compression bitrate. Only YouTube links are supported, including Shorts, music and playlists. Media availability depends on YouTube and your access.\n\nPowered by yt-dlp, FFmpeg and CommunityToolkit.Mvvm.", "Media Harbor help");
+    private async Task HelpAsync()
+    {
+        try
+        {
+            await DistributionFiles.OpenGuideAsync();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(ex.Message, "MediaHarbor Help", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private void About() => Dialogs.About(HelpCommand);
 
     public void Record(DownloadJob job)
     {

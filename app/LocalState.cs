@@ -10,7 +10,7 @@ internal sealed class LocalState
 
     internal LocalState() : this(
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MediaHarbor"),
-        Path.Combine(AppContext.BaseDirectory, "data")) { }
+        Path.Combine(DistributionFiles.ApplicationDirectory, "data")) { }
 
     internal LocalState(string directory, string legacyDirectory)
     {

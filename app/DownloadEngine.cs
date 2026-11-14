@@ -12,7 +12,7 @@ internal delegate Task<int> ProcessRunner(ProcessStartInfo info, Action<Process>
 
 public static class DownloadEngine
 {
-    public static string Tool(string name) => Path.Combine(AppContext.BaseDirectory, "tools", name + ".exe");
+    public static string Tool(string name) => Path.Combine(DistributionFiles.ApplicationDirectory, "tools", name + ".exe");
     internal static string OutputTemplate(DownloadOptions options) =>
         options.Prefix.Replace("%", "%%") + "%(title).150B [%(id)s].%(ext)s";
 

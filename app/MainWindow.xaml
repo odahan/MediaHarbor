@@ -37,6 +37,7 @@
                                     <MenuItem Header="Settings" Command="{Binding SettingsCommand}" />
                                     <Separator />
                                     <MenuItem Header="Help" Command="{Binding HelpCommand}" />
+                                    <MenuItem Header="About" Command="{Binding AboutCommand}" />
                                 </ContextMenu>
                             </Button.ContextMenu>
                         </Button>
