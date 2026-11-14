@@ -43,6 +43,35 @@ public static class Dialogs
         return window.ShowDialog() == true ? combo.SelectedItem as string : null;
     }
 
+    internal static bool? ChoosePlaylistMode(bool hasVideo)
+    {
+        var window = Window("YouTube playlist", 540, 205);
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = hasVideo
+                ? "This video belongs to a playlist. Download only this video, or choose which videos to download from the playlist."
+                : "Choose which videos to download from this playlist.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        var buttons = new WrapPanel { Margin = new Thickness(0, 20, 0, 0) };
+        bool? playlist = null;
+        Add("Choose playlist videos", () => { playlist = true; window.DialogResult = true; }, isDefault: true);
+        if (hasVideo)
+            Add("Download this video only", () => { playlist = false; window.DialogResult = true; });
+        Add("Cancel", () => window.DialogResult = false, isCancel: true);
+        panel.Children.Add(buttons);
+        window.Content = panel;
+        return window.ShowDialog() == true ? playlist : null;
+
+        void Add(string label, Action action, bool isDefault = false, bool isCancel = false)
+        {
+            var button = new Button { Content = label, IsDefault = isDefault, IsCancel = isCancel, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(8, 4, 8, 4) };
+            button.Click += (_, _) => action();
+            buttons.Children.Add(button);
+        }
+    }
+
     public static Window Busy(string title, CancellationTokenSource cancellation)
     {
         var window = Window(title, 400, 185);
@@ -67,7 +96,8 @@ public static class Dialogs
         var all = new Button { Content = "Select all", Margin = new Thickness(4, 0, 4, 0) };
         var none = new Button { Content = "Select none", Margin = new Thickness(4, 0, 4, 0) };
         var ok = new Button { Content = "Download selected", IsDefault = true };
-        bottom.Children.Add(all); bottom.Children.Add(none); bottom.Children.Add(ok); dock.Children.Add(bottom);
+        var cancel = new Button { Content = "Cancel", IsCancel = true, Margin = new Thickness(6, 0, 0, 0) };
+        bottom.Children.Add(all); bottom.Children.Add(none); bottom.Children.Add(ok); bottom.Children.Add(cancel); dock.Children.Add(bottom);
         var grid = new DataGrid { ItemsSource = results, AutoGenerateColumns = false, CanUserAddRows = false, HeadersVisibility = DataGridHeadersVisibility.Column, SelectionMode = DataGridSelectionMode.Extended };
         grid.Columns.Add(new DataGridCheckBoxColumn { Header = "✓", Binding = new Binding("Selected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged }, Width = 40 });
         grid.Columns.Add(new DataGridTextColumn { Header = "Title", Binding = new Binding("Title"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), IsReadOnly = true });
@@ -104,7 +134,7 @@ public static class Dialogs
         DockPanel.SetDock(browse, Dock.Right); cookieDock.Children.Add(browse);
         var cookies = new TextBox { Text = vm.Cookies }; cookieDock.Children.Add(cookies); panel.Children.Add(cookieDock);
         browse.Click += (_, _) => { var file = new OpenFileDialog { Filter = "Cookies text|*.txt|All files|*.*" }; if (file.ShowDialog() == true) cookies.Text = file.FileName; };
-        panel.Children.Add(new TextBlock { Text = "Settings apply to new downloads. Browser detection only reads the active browser’s address bar. Auto detect asks before adding a link.", TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.SlateGray, Margin = new Thickness(0, 15, 0, 10), FontSize = 11 });
+        panel.Children.Add(new TextBlock { Text = "The download limit also applies to jobs already waiting. Other download settings apply when you add a job. Auto detect asks before adding a link.", TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.SlateGray, Margin = new Thickness(0, 15, 0, 10), FontSize = 11 });
         var save = new Button { Content = "Save settings", IsDefault = true, HorizontalAlignment = HorizontalAlignment.Right };
         save.Click += (_, _) =>
         {
@@ -143,7 +173,7 @@ public static class Dialogs
         Add("Play", item => { if (File.Exists(item.File)) DownloadJob.Launch(item.File); else MessageBox.Show("The saved file is no longer available."); });
         Add("Download again", item => vm.Enqueue(item.Url, vm.Options()));
         Add("Copy URL", item => Clipboard.SetText(item.Url));
-        Add("Delete entry", item => { vm.HistoryItems.Remove(item); vm.SaveHistory(); grid.ItemsSource = vm.HistoryItems.ToArray(); });
+        Add("Delete entry", item => { vm.DeleteHistoryEntry(item); grid.ItemsSource = vm.HistoryItems.ToArray(); });
         window.Content = dock;
         window.ShowDialog();
     }

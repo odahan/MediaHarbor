@@ -227,7 +227,8 @@
         </ul>
         <div class="note">
           Launch the application with <code>MediaHarbor.exe</code>. Your settings and history are stored
-          in a <code>data</code> folder next to the executable (<code>settings.json</code>, <code>history.json</code>).
+          in <code>%LocalAppData%\MediaHarbor</code> (<code>settings.json</code>, <code>history.json</code>).
+          On first use, Media Harbor imports existing files from the <code>data</code> folder next to the executable.
         </div>
       </div>
       <div data-lang="fr">
@@ -240,7 +241,8 @@
         </ul>
         <div class="note">
           Lancez l'application avec <code>MediaHarbor.exe</code>. Vos paramètres et votre historique sont
-          enregistrés dans un dossier <code>data</code> à côté de l'exécutable (<code>settings.json</code>, <code>history.json</code>).
+          enregistrés dans <code>%LocalAppData%\MediaHarbor</code> (<code>settings.json</code>, <code>history.json</code>).
+          Au premier lancement, Media Harbor importe les fichiers existants du dossier <code>data</code> situé à côté de l'exécutable.
         </div>
       </div>
     </section>
@@ -394,8 +396,8 @@
           you want to select entries before downloading:
         </p>
         <ul>
-          <li><strong>Yes:</strong> the playlist is read and a selector window lets you tick the videos to download.</li>
-          <li><strong>No:</strong> the whole playlist is queued as-is.</li>
+          <li><strong>Choose playlist videos</strong> opens a selector. Tick the videos you want and confirm to add them as separate downloads. You can close the selector without adding anything.</li>
+          <li><strong>Download this video only</strong> adds the video in the link. This option is available when the link identifies a video.</li>
           <li><strong>Cancel:</strong> the link is ignored.</li>
         </ul>
         <div class="tip">Enable <em>Number playlist entries</em> in Settings to prefix file names with their position in the playlist (01, 02, …) — useful for albums.</div>
@@ -407,8 +409,8 @@
           si vous souhaitez sélectionner les entrées avant le téléchargement :
         </p>
         <ul>
-          <li><strong>Oui :</strong> la playlist est lue et une fenêtre de sélection permet de cocher les vidéos à télécharger.</li>
-          <li><strong>Non :</strong> la playlist entière est mise en file telle quelle.</li>
+          <li><strong>Choose playlist videos</strong> ouvre le sélecteur. Cochez les vidéos voulues et confirmez pour les ajouter séparément à la file. Vous pouvez fermer le sélecteur sans rien ajouter.</li>
+          <li><strong>Download this video only</strong> ajoute uniquement la vidéo du lien. Ce choix est proposé si le lien désigne une vidéo.</li>
           <li><strong>Annuler :</strong> le lien est ignoré.</li>
         </ul>
         <div class="tip">Activez <em>Number playlist entries</em> dans les paramètres pour préfixer les noms de fichiers par leur position dans la playlist (01, 02, …) — pratique pour les albums.</div>
@@ -419,7 +421,7 @@
     <section id="jobs">
       <div data-lang="en">
         <h2>Download list</h2>
-        <p>Each entry shows the title, format/quality/folder details, a bright green progress bar and a status line. The action button changes with the state:</p>
+        <p>Each entry shows the title, format, quality and destination. The progress bar follows the current download phase. It animates without a percentage during assembly, conversion or any phase without measurable progress. The action button changes with the state:</p>
         <table>
           <tr><th>State</th><th>Button</th><th>Effect</th></tr>
           <tr><td>Downloading</td><td>Pause</td><td>Stops the download; the partial file is kept.</td></tr>
@@ -443,7 +445,7 @@
       </div>
       <div data-lang="fr">
         <h2>Liste des téléchargements</h2>
-        <p>Chaque entrée affiche le titre, les détails format/qualité/dossier, une barre de progression vert vif et un état. Le bouton d'action change selon l'état :</p>
+        <p>Chaque entrée affiche le titre, le format, la qualité et la destination. La barre suit la phase de téléchargement en cours. Elle s'anime sans pourcentage pendant l'assemblage, la conversion ou toute phase dont la progression ne peut être mesurée. Le bouton d'action change selon l'état :</p>
         <table>
           <tr><th>État</th><th>Bouton</th><th>Effet</th></tr>
           <tr><td>En cours</td><td>Pause</td><td>Interrompt le téléchargement ; le fichier partiel est conservé.</td></tr>
@@ -528,7 +530,7 @@
           <tr><td><strong>Proxy URL</strong></td><td>Optional proxy, e.g. <code>http://127.0.0.1:8080</code>.</td></tr>
           <tr><td><strong>YouTube cookies file</strong></td><td>A cookies file in Netscape format, used to access videos that require sign-in (age-restricted, members-only). Use a browser extension such as «Get cookies.txt» to export it.</td></tr>
         </table>
-        <div class="note">Settings are saved automatically when the dialog closes and are kept in <code>data\settings.json</code>.</div>
+        <div class="note">Use <strong>Save settings</strong> to apply changes. The settings file is stored in <code>%LocalAppData%\MediaHarbor\settings.json</code>.</div>
       </div>
       <div data-lang="fr">
         <h2>Paramètres</h2>
@@ -543,7 +545,7 @@
           <tr><td><strong>Proxy URL</strong></td><td>Proxy optionnel, ex. <code>http://127.0.0.1:8080</code>.</td></tr>
           <tr><td><strong>YouTube cookies file</strong></td><td>Fichier de cookies au format Netscape, utilisé pour les vidéos nécessitant une connexion (restriction d'âge, contenu membres). Utilisez une extension navigateur comme « Get cookies.txt » pour l'exporter.</td></tr>
         </table>
-        <div class="note">Les paramètres sont enregistrés automatiquement à la fermeture de la boîte et conservés dans <code>data\settings.json</code>.</div>
+        <div class="note">Cliquez sur <strong>Save settings</strong> pour appliquer les changements. Le fichier est conservé dans <code>%LocalAppData%\MediaHarbor\settings.json</code>.</div>
       </div>
     </section>
 

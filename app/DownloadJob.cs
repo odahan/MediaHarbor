@@ -12,7 +12,6 @@ public partial class DownloadJob : ObservableObject
     private CancellationTokenSource? cancellation;
     private bool paused;
     private string lastError = "";
-    private int runVersion;
     public DownloadOptions Options { get; }
     public string Url { get; }
     public string FilePath { get; private set; } = "";
@@ -25,6 +24,8 @@ public partial class DownloadJob : ObservableObject
     [ObservableProperty] private string status = "Queued";
     [ObservableProperty] private string actionLabel = "Pause";
     [ObservableProperty] private double progress;
+    [ObservableProperty] private bool progressIndeterminate;
+    private string? resolvedUrl;
 
     public DownloadJob(MainViewModel owner, string url, DownloadOptions options)
     {
@@ -39,12 +40,16 @@ public partial class DownloadJob : ObservableObject
     public async Task StartAsync()
     {
         if (Running || Complete || Removed || paused) return;
-        var version = ++runVersion;
-        cancellation = new CancellationTokenSource();
-        var token = cancellation.Token;
+        using var attempt = new CancellationTokenSource();
+        cancellation = attempt;
+        var token = attempt.Token;
         Running = true;
         lastError = "";
+        FilePath = "";
+        Progress = 0;
+        ProgressIndeterminate = true;
         ActionLabel = "Pause";
+        DownloadDestination? reservation = null;
         try
         {
             Status = "Waiting for a download slot…";
@@ -52,11 +57,30 @@ public partial class DownloadJob : ObservableObject
             await slots.WaitAsync(token);
             try
             {
-                Directory.CreateDirectory(Options.Folder);
                 Status = "Reading media information…";
-                var code = await DownloadEngine.RunAsync(DownloadEngine.StartInfo("yt-dlp", DownloadEngine.Arguments(Url, Options)), _ => { }, line => Ui(() => Receive(line)),
-                    line => Ui(() => { if (DownloadEngine.ParsePercent(line) is null) lastError = line; else Receive(line); }), token);
-                if (code != 0) throw new InvalidOperationException(string.IsNullOrEmpty(lastError) ? $"Download failed (exit {code})." : lastError);
+                token.ThrowIfCancellationRequested();
+                var url = resolvedUrl ?? Url;
+                if (url.StartsWith("ytsearch1:", StringComparison.Ordinal))
+                {
+                    var matches = await DownloadEngine.ListAsync(url, false, Options, owner.RunProcess, token);
+                    url = matches.FirstOrDefault()?.Url ?? throw new InvalidOperationException("No matching YouTube video was found.");
+                    resolvedUrl = url;
+                }
+                var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Options.Folder));
+                var destination = new DownloadDestination(folder, YouTubeLinks.VideoId(url) ?? url);
+                if (!owner.Reserve(destination))
+                    throw new IOException("This media is already being downloaded to this folder. Retry after that download finishes.");
+                reservation = destination;
+
+                Directory.CreateDirectory(folder);
+                var info = DownloadEngine.StartInfo("yt-dlp", DownloadEngine.Arguments(url, Options with { Folder = folder }));
+                var code = await owner.RunProcess(info, _ => { }, Receive, line =>
+                {
+                    if (IsProgressMessage(line)) Receive(line);
+                    else if (!string.IsNullOrWhiteSpace(line)) lastError = line;
+                }, token);
+                token.ThrowIfCancellationRequested();
+                if (code != 0) throw new InvalidOperationException(DownloadError(code));
                 if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) throw new IOException("The downloader did not report a saved media file.");
                 Complete = true;
                 Progress = 100;
@@ -64,30 +88,51 @@ public partial class DownloadJob : ObservableObject
                 ActionLabel = "Play";
                 owner.Record(this);
             }
-            finally { slots.Release(); }
+            finally
+            {
+                if (reservation is { } destination) owner.Release(destination);
+                slots.Release();
+            }
         }
         catch (OperationCanceledException) { if (!Removed) { Status = "Paused · partial download retained"; ActionLabel = "Resume"; } }
         catch (Exception ex) { Status = ex.Message; ActionLabel = "Retry"; }
         finally
         {
-            if (version == runVersion) Running = false;
+            ProgressIndeterminate = false;
+            Running = false;
+            cancellation = null;
         }
     }
 
-    private static void Ui(Action action) => Application.Current.Dispatcher.Invoke(action);
+    private string DownloadError(int code)
+    {
+        if (!Options.Audio && lastError.Contains("Requested format is not available", StringComparison.OrdinalIgnoreCase))
+            return $"No video format matches the {Options.Quality}p limit. Try a higher resolution if available.";
+        return string.IsNullOrEmpty(lastError) ? $"Download failed (exit {code})." : lastError;
+    }
+
+    private static bool IsProgressMessage(string line) => line.StartsWith("PROGRESS|", StringComparison.Ordinal) ||
+        line.StartsWith("POSTPROCESS", StringComparison.Ordinal);
+
     private void Receive(string line)
     {
         if (line.StartsWith("TITLE|")) Title = line[6..];
         else if (line.StartsWith("FILE|")) FilePath = line[5..];
-        else if (DownloadEngine.ParsePercent(line) is { } value)
+        else if (line.StartsWith("PROGRESS|", StringComparison.Ordinal))
         {
-            Progress = value;
-            Status = "Downloading · " + System.Text.RegularExpressions.Regex.Replace(line, @"\x1B\[[0-9;]*m", "").Replace("PROGRESS|", "").Trim().Replace("|", " · ");
+            var parts = line.Split('|');
+            var percent = DownloadEngine.ParsePercent(line);
+            ProgressIndeterminate = percent is null;
+            if (percent is { } value) Progress = value;
+            var phase = parts.Length < 6 ? "media" : parts[4] == "none" ? "audio" : parts[5] == "none" ? "video" : "media";
+            Status = "Downloading " + phase + " · " + string.Join(" · ", parts.Skip(1).Take(3).Select(part => part.Trim()));
         }
-        else if (line.Contains("[ExtractAudio]") || line.Contains("[VideoConvertor]") || line.Contains("[Merger]") || line.Contains("[VideoRemuxer]"))
+        else if (line.StartsWith("POSTPROCESS", StringComparison.Ordinal) ||
+                 line.Contains("[ExtractAudio]") || line.Contains("[VideoConvertor]") ||
+                 line.Contains("[Merger]") || line.Contains("[VideoRemuxer]"))
         {
-            if (Status != "Converting media…") Progress = 0;
-            Status = "Converting media…";
+            ProgressIndeterminate = true;
+            Status = "Assembling or converting media…";
         }
     }
 
@@ -115,7 +160,7 @@ public partial class DownloadJob : ObservableObject
     [RelayCommand] private void Open() { if (File.Exists(FilePath)) Launch(FilePath); }
     [RelayCommand] private void Reveal() { if (File.Exists(FilePath)) Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{FilePath}\"") { UseShellExecute = true }); else Launch(Options.Folder); }
     [RelayCommand] private void Copy() => Clipboard.SetText(Url);
-    [RelayCommand] private void Subtitles() => owner.DownloadSubtitles(Url, Options.Folder);
+    [RelayCommand] private Task SubtitlesAsync() => owner.DownloadSubtitlesAsync(resolvedUrl ?? Url, Options);
     [RelayCommand] private void Remove() { Removed = true; cancellation?.Cancel(); owner.Jobs.Remove(this); }
     public void Stop() { paused = true; cancellation?.Cancel(); }
     public static void Launch(string path) { try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception ex) { MessageBox.Show(ex.Message, "Unable to open"); } }

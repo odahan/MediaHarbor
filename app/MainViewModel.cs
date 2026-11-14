@@ -12,8 +12,8 @@ namespace MediaHarbor;
 public partial class MainViewModel : ObservableObject, IDisposable
 {
     private readonly bool screenshotMode;
-    private readonly string stateFile = Path.Combine(AppContext.BaseDirectory, "data", "settings.json");
-    private readonly string historyFile = Path.Combine(AppContext.BaseDirectory, "data", "history.json");
+    private readonly LocalState storage;
+    private readonly HashSet<DownloadDestination> activeDestinations = new(DownloadDestination.Comparer);
     private readonly DispatcherTimer clipboardTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private string previousClipboard = "";
     private string previousBrowser = "";
@@ -22,7 +22,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public event Action? SearchRequested;
     public ObservableCollection<DownloadJob> Jobs { get; } = [];
     public List<HistoryEntry> HistoryItems { get; private set; } = [];
-    public SemaphoreSlim Slots { get; private set; } = new(Math.Min(8, Environment.ProcessorCount * 2));
+    internal DownloadQueue Slots { get; } = new(Math.Min(8, Environment.ProcessorCount * 2));
+    internal ProcessRunner RunProcess { get; }
     public string[] VideoFormats { get; } = ["mp4"];
     public string[] AudioFormats { get; } = ["mp3"];
     public string[] SearchModes { get; } = ["Most relevant", "View results"];
@@ -51,9 +52,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public string Proxy { get; set; } = "";
     public string Cookies { get; set; } = "";
 
-    public MainViewModel(bool screenshotMode)
+    public MainViewModel(bool screenshotMode) : this(screenshotMode, DownloadEngine.RunAsync) { }
+
+    internal MainViewModel(bool screenshotMode, ProcessRunner runProcess)
     {
         this.screenshotMode = screenshotMode;
+        RunProcess = runProcess;
+        storage = new LocalState();
         if (!screenshotMode) Load();
         loading = false;
         clipboardTimer.Tick += (_, _) => CheckClipboard();
@@ -101,11 +106,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (links.Length == 0) { Notice = "Paste a YouTube link (youtube.com or youtu.be). Other websites are not supported."; return; }
         foreach (var url in links)
         {
-            if (url.Contains("list=", StringComparison.OrdinalIgnoreCase) || url.Contains("/playlist", StringComparison.OrdinalIgnoreCase))
+            var uri = new Uri(url);
+            if (YouTubeLinks.QueryValue(uri, "list") != null || uri.AbsolutePath.Equals("/playlist", StringComparison.OrdinalIgnoreCase))
             {
-                var answer = MessageBox.Show("This link may contain a playlist. Select entries before downloading?", "Playlist", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
-                if (answer == MessageBoxResult.Cancel) continue;
-                if (answer == MessageBoxResult.Yes) { await SelectMediaAsync(url, true); continue; }
+                var playlist = Dialogs.ChoosePlaylistMode(YouTubeLinks.VideoId(url) != null);
+                if (playlist is null) continue;
+                if (playlist.Value) { await SelectMediaAsync(url, true); continue; }
             }
             Enqueue(url, Options());
         }
@@ -141,12 +147,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
         busy.Show();
         try
         {
-            var results = await DownloadEngine.ListAsync(query, playlist, cancellation.Token);
+            var options = Options();
+            var results = await DownloadEngine.ListAsync(query, playlist, options, RunProcess, cancellation.Token);
             busy.Close();
+            if (results.Count == 0) { Notice = "No videos found."; return; }
             var selected = Dialogs.SelectResults(results, playlist ? "Choose playlist entries" : "Search results");
-            var playlistFolder = playlist ? Path.Combine(Folder, MediaLogic.PlaylistFolderName(results)) : Folder;
+            var playlistFolder = playlist ? Path.Combine(options.Folder, MediaLogic.PlaylistFolderName(results)) : options.Folder;
+            var positions = results.Select((entry, index) => (entry, index)).ToDictionary(item => item.entry, item => item.index + 1);
             foreach (var entry in selected)
-                Enqueue(entry.Url, Options() with { Folder = playlistFolder, Prefix = playlist && Numbering ? $"{results.ToList().IndexOf(entry) + 1:000} - " : "" });
+                Enqueue(entry.Url, options with { Folder = playlistFolder, Prefix = playlist && options.Numbering ? $"{positions[entry]:000} - " : "" });
             Notice = $"Added {selected.Count} item(s)";
         }
         catch (OperationCanceledException) { Notice = "Search cancelled"; }
@@ -181,7 +190,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         finally { browserProbeRunning = false; }
     }
 
-    public void ApplyParallel() { Slots = new SemaphoreSlim(Math.Clamp(Parallel, 1, 8)); }
+    public void ApplyParallel() => Slots.SetLimit(Parallel);
+
+    internal bool Reserve(DownloadDestination destination) => activeDestinations.Add(destination);
+    internal void Release(DownloadDestination destination) => activeDestinations.Remove(destination);
 
     [RelayCommand] private void FocusSearch() => SearchRequested?.Invoke();
     [RelayCommand] private void ResumeAll() { foreach (var job in Jobs.ToArray()) job.Resume(); }
@@ -200,10 +212,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var file = new OpenFileDialog { Title = trim ? "Choose audio to trim" : "Choose media to convert", Filter = "Media files|*.mp3;*.mp4;*.wav;*.m4a;*.aac;*.webm;*.mkv;*.avi;*.flv;*.wmv;*.mov;*.ogg|All files|*.*" };
         if (file.ShowDialog() != true) return;
         var format = trim ? "mp3" : IsAudio ? AudioFormat : VideoFormat;
-        var save = new SaveFileDialog { Title = "Save output", Filter = $"{format.ToUpperInvariant()} file|*.{format}", FileName = Path.GetFileNameWithoutExtension(file.FileName) + (trim ? " - trimmed" : " - converted"), InitialDirectory = Folder };
+        var save = new SaveFileDialog { Title = "Save output", Filter = $"{format.ToUpperInvariant()} file|*.{format}", FileName = Path.GetFileNameWithoutExtension(file.FileName) + (trim ? " - trimmed" : " - converted"), InitialDirectory = Folder, OverwritePrompt = false };
         if (save.ShowDialog() != true) return;
         if (string.Equals(save.FileName, file.FileName, StringComparison.OrdinalIgnoreCase)) { MessageBox.Show("Choose a different output file."); return; }
-        var args = new List<string> { "-nostdin", "-y" };
+        var overwrite = File.Exists(save.FileName);
+        if (overwrite && MessageBox.Show("Replace the existing output file?", "Save output", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+        var args = new List<string> { "-nostdin", "-n" };
         if (trim)
         {
             var start = Dialogs.Prompt("Trim audio", "Start time (hh:mm:ss or seconds):", "0");
@@ -215,28 +230,40 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         args.AddRange(["-i", file.FileName]);
         if (trim || IsAudio) args.AddRange(["-vn", "-b:a", Options().Quality + "k"]);
-        args.Add(save.FileName);
-        await RunUtilityAsync("ffmpeg", args, "Converting media…");
+        await RunUtilityAsync("Converting media…", token => LocalConversion.RunAsync(save.FileName, args, overwrite, RunProcess, token));
     }
 
-    public async void DownloadSubtitles(string url, string folder)
+    public async Task DownloadSubtitlesAsync(string url, DownloadOptions options)
     {
         var language = Dialogs.Prompt("Subtitles", "Language code, such as en, fr, or all:", "en");
         if (language == null) return;
-        await RunUtilityAsync("yt-dlp", ["--ignore-config", "--skip-download", "--write-subs", "--write-auto-subs", "--sub-langs", language, "--convert-subs", "srt", "--ffmpeg-location", DownloadEngine.Tool("ffmpeg"), "-o", Path.Combine(folder, "%(title).170B.%(ext)s"), "--", url], "Downloading subtitles…");
+        var args = new List<string> { "--ignore-config", "--skip-download", "--no-playlist", "--write-subs", "--write-auto-subs", "--sub-langs", language, "--convert-subs", "srt", "--ffmpeg-location", DownloadEngine.Tool("ffmpeg"), "-P", options.Folder, "-o", DownloadEngine.OutputTemplate(options) };
+        if (!string.IsNullOrWhiteSpace(options.Proxy)) args.AddRange(["--proxy", options.Proxy]);
+        if (!string.IsNullOrWhiteSpace(options.Cookies)) args.AddRange(["--cookies", options.Cookies]);
+        args.AddRange(["--", url]);
+        await RunUtilityAsync("Downloading subtitles…", async token =>
+        {
+            var errors = new Queue<string>();
+            var code = await RunProcess(DownloadEngine.StartInfo("yt-dlp", args), _ => { }, _ => { }, line =>
+            {
+                if (errors.Count == 3) errors.Dequeue();
+                errors.Enqueue(line);
+            }, token);
+            if (code != 0)
+                throw new IOException(string.Join(Environment.NewLine, errors.DefaultIfEmpty($"yt-dlp exited with code {code}.")));
+        });
     }
 
-    private async Task RunUtilityAsync(string tool, IEnumerable<string> args, string title)
+    private async Task RunUtilityAsync(string title, Func<CancellationToken, Task> execute)
     {
         using var cancellation = new CancellationTokenSource();
         var busy = Dialogs.Busy(title, cancellation);
         busy.Show();
-        var errors = new List<string>();
         try
         {
-            var code = await DownloadEngine.RunAsync(DownloadEngine.StartInfo(tool, args), _ => { }, _ => { }, errors.Add, cancellation.Token);
-            Notice = code == 0 ? "Finished · output saved" : string.Join("\n", errors.TakeLast(3));
-            MessageBox.Show(Notice, code == 0 ? "Completed" : "Unable to finish");
+            await execute(cancellation.Token);
+            Notice = "Finished · output saved";
+            MessageBox.Show(Notice, "Completed");
         }
         catch (OperationCanceledException) { Notice = "Cancelled"; }
         catch (Exception ex) { Notice = ex.Message; MessageBox.Show(ex.Message); }
@@ -250,39 +277,56 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         HistoryItems.Insert(0, new HistoryEntry(job.Title, job.Url, job.FilePath, DateTime.Now));
         if (screenshotMode) return;
-        try { Directory.CreateDirectory(Path.GetDirectoryName(historyFile)!); File.WriteAllText(historyFile, JsonSerializer.Serialize(HistoryItems)); }
-        catch (IOException ex) { Notice = "Downloaded; history could not be saved: " + ex.Message; }
+        try { storage.SaveHistory(HistoryItems); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Notice = "Downloaded. History could not be saved: " + ex.Message; }
     }
-    public void SaveHistory() { Directory.CreateDirectory(Path.GetDirectoryName(historyFile)!); File.WriteAllText(historyFile, JsonSerializer.Serialize(HistoryItems)); }
+
+    public void DeleteHistoryEntry(HistoryEntry item)
+    {
+        var index = HistoryItems.IndexOf(item);
+        if (index < 0) return;
+        HistoryItems.RemoveAt(index);
+        if (screenshotMode) return;
+        try { storage.SaveHistory(HistoryItems); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            HistoryItems.Insert(index, item);
+            MessageBox.Show(ex.Message, "History could not be saved");
+        }
+    }
 
     public void Save()
     {
         if (screenshotMode || loading) return;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(stateFile)!);
-            File.WriteAllText(stateFile, JsonSerializer.Serialize(new SavedSettings(Folder, VideoFormat, AudioFormat, IsAudio, QualityMode, CustomQuality, SpeedLimit, AutoDetect, Parallel, Numbering, Artwork, IncludeSubtitles, Proxy, Cookies, BrowserDetect, FfmpegThreads)));
+            storage.SaveSettings(new SavedSettings(Folder, VideoFormat, AudioFormat, IsAudio, QualityMode, CustomQuality, SpeedLimit, AutoDetect, Parallel, Numbering, Artwork, IncludeSubtitles, Proxy, Cookies, BrowserDetect, FfmpegThreads));
         }
-        catch (IOException ex) { Notice = "Settings could not be saved: " + ex.Message; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Notice = "Settings could not be saved: " + ex.Message; }
     }
 
     private void Load()
     {
         try
         {
-            if (File.Exists(stateFile) && JsonSerializer.Deserialize<SavedSettings>(File.ReadAllText(stateFile)) is { } s)
+            if (storage.LoadSettings() is { } s)
             {
                 Folder = s.Folder; VideoFormat = "mp4"; AudioFormat = "mp3"; IsAudio = s.IsAudio; CustomQuality = s.CustomQuality; QualityMode = s.QualityMode;
                 SpeedLimit = s.SpeedLimit; AutoDetect = s.AutoDetect; Parallel = Math.Clamp(s.Parallel, 1, 8); Numbering = s.Numbering; Artwork = s.Artwork; IncludeSubtitles = s.Subtitles; Proxy = s.Proxy; Cookies = s.Cookies;
                 BrowserDetect = s.BrowserDetect;
                 if (s.FfmpegThreads is > 0) FfmpegThreads = Math.Clamp(s.FfmpegThreads.Value, 1, Environment.ProcessorCount);
-                Slots = new SemaphoreSlim(Parallel);
+                ApplyParallel();
             }
-            if (File.Exists(historyFile)) HistoryItems = JsonSerializer.Deserialize<List<HistoryEntry>>(File.ReadAllText(historyFile)) ?? [];
         }
-        catch (Exception ex) when (ex is IOException or JsonException) { Notice = "Saved preferences could not be read."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { Notice = "Saved preferences could not be read."; }
+
+        try { HistoryItems = storage.LoadHistory() ?? []; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            Notice = "Saved history could not be read.";
+        }
     }
-    public void Dispose() { Save(); clipboardTimer.Stop(); foreach (var job in Jobs) job.Stop(); }
+    public void Dispose() { clipboardTimer.Stop(); foreach (var job in Jobs) job.Stop(); Save(); }
 }
 
 public sealed record SavedSettings(string Folder, string VideoFormat, string AudioFormat, bool IsAudio, string QualityMode, string CustomQuality, string SpeedLimit, bool AutoDetect, int Parallel, bool Numbering, bool Artwork, bool Subtitles, string Proxy, string Cookies, bool BrowserDetect = false, int? FfmpegThreads = null);

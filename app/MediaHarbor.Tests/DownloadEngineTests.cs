@@ -68,7 +68,7 @@ public class DownloadEngineTests
         var args = DownloadEngine.Arguments("u", BaseOptions() with { Audio = false, Format = "mp4", Quality = 1080 });
         var formatIndex = args.IndexOf("-f");
         Assert.True(formatIndex >= 0);
-        Assert.Equal("bv*[height<=1080]+ba/b[height<=1080]/b", args[formatIndex + 1]);
+        Assert.Equal("bv*[height<=1080]+ba/b[height<=1080]", args[formatIndex + 1]);
         Assert.Contains("--merge-output-format", args);
         Assert.Contains("--remux-video", args);
         Assert.Contains("res:1080,vcodec:h264,acodec:aac", args);
@@ -137,6 +137,7 @@ public class DownloadEngineTests
         var outputIndex = args.IndexOf("-o");
         Assert.True(outputIndex >= 0);
         Assert.Contains("100%% - ", args[outputIndex + 1]);
+        Assert.Contains("[%(id)s]", args[outputIndex + 1]);
     }
 
     [Theory]

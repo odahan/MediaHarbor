@@ -8,9 +8,13 @@ namespace MediaHarbor;
 
 public sealed record DownloadOptions(string Folder, string Format, bool Audio, int Quality, string Speed, bool Playlist, bool Subtitles, bool Numbering, bool Artwork, string Proxy, string Cookies, int Parallel, string Prefix = "", int Threads = 0);
 
+internal delegate Task<int> ProcessRunner(ProcessStartInfo info, Action<Process> started, Action<string> output, Action<string> error, CancellationToken token);
+
 public static class DownloadEngine
 {
     public static string Tool(string name) => Path.Combine(AppContext.BaseDirectory, "tools", name + ".exe");
+    internal static string OutputTemplate(DownloadOptions options) =>
+        options.Prefix.Replace("%", "%%") + "%(title).150B [%(id)s].%(ext)s";
 
     /// <summary>Uses argument lists so media titles and URLs never become shell commands.</summary>
     public static ProcessStartInfo StartInfo(string tool, IEnumerable<string> arguments)
@@ -33,9 +37,11 @@ public static class DownloadEngine
             "--ignore-config", "--no-warnings", "--newline", "--encoding", "utf-8",
             "--continue", "--windows-filenames", "--no-mtime", "--ffmpeg-location", Tool("ffmpeg"),
             "--progress", "--no-color",
-            "--progress-template", "download:PROGRESS|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
+            "--progress-template", "download:PROGRESS|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(info.vcodec)s|%(info.acodec)s",
+            "--progress-template", "postprocess:POSTPROCESS",
             "--print", "before_dl:TITLE|%(title)s", "--print", "after_move:FILE|%(filepath)s",
-            "-o", Path.Combine(options.Folder, options.Prefix.Replace("%", "%%") + "%(title).170B.%(ext)s"),
+            "-P", options.Folder,
+            "-o", OutputTemplate(options),
             options.Playlist ? "--yes-playlist" : "--no-playlist"
         };
         if (options.Audio)
@@ -46,7 +52,7 @@ public static class DownloadEngine
         else
         {
             var height = options.Quality;
-            args.AddRange(["-f", $"bv*[height<={height}]+ba/b[height<={height}]/b", "-S", $"res:{height},vcodec:h264,acodec:aac", "--merge-output-format", options.Format, "--remux-video", options.Format]);
+            args.AddRange(["-f", $"bv*[height<={height}]+ba/b[height<={height}]", "-S", $"res:{height},vcodec:h264,acodec:aac", "--merge-output-format", options.Format, "--remux-video", options.Format]);
         }
         if (options.Threads > 0) args.AddRange(["--postprocessor-args", "ffmpeg:-threads " + options.Threads.ToString(CultureInfo.InvariantCulture)]);
         if (options.Subtitles) args.AddRange(["--write-subs", "--write-auto-subs", "--sub-langs", "en.*,fr.*", "--sub-format", "srt/best", "--convert-subs", "srt"]);
@@ -60,6 +66,7 @@ public static class DownloadEngine
 
     public static async Task<int> RunAsync(ProcessStartInfo info, Action<Process> started, Action<string> output, Action<string> error, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
         using var process = new Process { StartInfo = info };
         process.Start();
         started(process);
@@ -77,29 +84,37 @@ public static class DownloadEngine
         while (await stream.ReadLineAsync() is { } line) receive(line);
     }
 
-    public static async Task<IReadOnlyList<SearchResult>> ListAsync(string query, bool playlist, CancellationToken token)
+    internal static async Task<IReadOnlyList<SearchResult>> ListAsync(string query, bool playlist, DownloadOptions options, ProcessRunner run, CancellationToken token)
     {
         var items = new List<SearchResult>();
         var errors = new List<string>();
-        var args = new[] { "--ignore-config", "--flat-playlist", "--dump-json", "--skip-download", "--no-warnings", "--playlist-end", "200", "--", playlist ? query : "ytsearch10:" + query };
-        var code = await RunAsync(StartInfo("yt-dlp", args), _ => { }, line =>
+        var args = new List<string> { "--ignore-config", "--flat-playlist", "--dump-json", "--skip-download", "--no-warnings", playlist ? "--yes-playlist" : "--no-playlist" };
+        if (!string.IsNullOrWhiteSpace(options.Proxy)) args.AddRange(["--proxy", options.Proxy]);
+        if (!string.IsNullOrWhiteSpace(options.Cookies)) args.AddRange(["--cookies", options.Cookies]);
+        args.AddRange(["--", playlist || query.StartsWith("ytsearch1:", StringComparison.Ordinal) ? query : "ytsearch10:" + query]);
+        var code = await run(StartInfo("yt-dlp", args), _ => { }, line =>
         {
             try
             {
                 using var doc = JsonDocument.Parse(line);
                 var root = doc.RootElement;
-                var title = root.GetProperty("title").GetString() ?? "Untitled";
-                var url = root.TryGetProperty("webpage_url", out var web) ? web.GetString() : root.GetProperty("url").GetString();
-                if (url != null && !url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) url = "https://www.youtube.com/watch?v=" + url;
-                var playlistTitle = root.TryGetProperty("playlist_title", out var pt) && pt.ValueKind == JsonValueKind.String ? pt.GetString()
-                    : root.TryGetProperty("playlist", out var pl) && pl.ValueKind == JsonValueKind.String ? pl.GetString() : null;
-                if (url != null) items.Add(new SearchResult { Title = title, Url = url, PlaylistTitle = playlistTitle ?? "" });
+                var title = ReadString(root, "title") ?? "Untitled";
+                var url = ReadString(root, "webpage_url") ?? ReadString(root, "url");
+                if (url != null && !Uri.TryCreate(url, UriKind.Absolute, out _)) url = "https://www.youtube.com/watch?v=" + url;
+                var playlistTitle = ReadString(root, "playlist_title") ?? ReadString(root, "playlist");
+                if (url != null && YouTubeLinks.IsSupported(url))
+                    items.Add(new SearchResult { Title = title, Url = url, PlaylistTitle = playlistTitle ?? "" });
             }
             catch (JsonException) { }
         }, errors.Add, token);
-        if (code != 0 && items.Count == 0) throw new InvalidOperationException(string.Join("\n", errors.TakeLast(3)));
+        if (code != 0 && items.Count == 0) throw new InvalidOperationException(string.Join("\n", errors.TakeLast(3).DefaultIfEmpty($"yt-dlp exited with code {code}.")));
         return items;
     }
+
+    private static string? ReadString(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     public static double? ParsePercent(string line)
     {

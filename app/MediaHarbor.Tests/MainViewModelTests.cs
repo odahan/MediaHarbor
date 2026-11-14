@@ -148,9 +148,9 @@ public class MainViewModelTests
         using var vm = CreateViewModel();
         vm.Parallel = 99;
         vm.ApplyParallel();
-        Assert.Equal(8, vm.Slots.CurrentCount);
+        Assert.Equal(8, vm.Slots.Limit);
         vm.Parallel = 0;
         vm.ApplyParallel();
-        Assert.Equal(1, vm.Slots.CurrentCount);
+        Assert.Equal(1, vm.Slots.Limit);
     }
 }

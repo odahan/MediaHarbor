@@ -11,14 +11,14 @@ public static class EngineSelfTest
     /// <summary>Exercises a real local HTTP download, audio conversion, progress and history.</summary>
     public static async Task RunAsync()
     {
-        var folder = Path.Combine(AppContext.BaseDirectory, "self-test");
+        var folder = Path.Combine(AppContext.BaseDirectory, "self-test", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         var source = Path.Combine(folder, "source.wav");
         var errors = new List<string>();
         var code = await DownloadEngine.RunAsync(DownloadEngine.StartInfo("ffmpeg", ["-nostdin", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=3", source]), _ => { }, _ => { }, errors.Add, CancellationToken.None);
         Require(code == 0 && File.Exists(source), "Generate real source audio");
-        var videoSource = Path.Combine(folder, "source.mp4");
-        code = await DownloadEngine.RunAsync(DownloadEngine.StartInfo("ffmpeg", ["-nostdin", "-y", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=10", "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p", videoSource]), _ => { }, _ => { }, errors.Add, CancellationToken.None);
+        var videoSource = Path.Combine(folder, "source.ts");
+        code = await DownloadEngine.RunAsync(DownloadEngine.StartInfo("ffmpeg", ["-nostdin", "-y", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=10", "-f", "lavfi", "-i", "sine=frequency=440", "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", videoSource]), _ => { }, _ => { }, errors.Add, CancellationToken.None);
         Require(code == 0 && File.Exists(videoSource), "Generate real source video");
         var bytes = await File.ReadAllBytesAsync(source);
         var videoBytes = await File.ReadAllBytesAsync(videoSource);
@@ -55,13 +55,18 @@ public static class EngineSelfTest
             Require(job.Complete && File.Exists(job.FilePath), "HTTP media download and conversion: " + job.Status);
             Require(new FileInfo(job.FilePath).Length > 1000 && job.FilePath.EndsWith(".mp3"), "Nonempty MP3 output");
             Require(job.Progress == 100 && vm.HistoryItems.Any(x => x.File == job.FilePath), "Completion and successful history record");
-            var videoJob = new DownloadJob(vm, $"http://127.0.0.1:{port}/video.mp4", options with { Audio = false, Format = "mp4", Quality = 480 });
+            var videoOptions = options with { Audio = false, Format = "mp4", Quality = 480 };
+            var videoUrl = $"http://127.0.0.1:{port}/master.m3u8";
+            var videoJob = new DownloadJob(vm, videoUrl, videoOptions);
             await videoJob.StartAsync();
             Require(videoJob.Complete && new FileInfo(videoJob.FilePath).Length > 1000, "HTTP video download: " + videoJob.Status);
+            var cappedJob = new DownloadJob(vm, videoUrl, videoOptions with { Quality = 144 });
+            await cappedJob.StartAsync();
+            Require(!cappedJob.Complete && cappedJob.Status.Contains("144p"), "Video format above the height cap is rejected");
             var trim = Path.Combine(folder, "trimmed.mp3");
-            code = await DownloadEngine.RunAsync(DownloadEngine.StartInfo("ffmpeg", ["-nostdin", "-y", "-ss", "1", "-t", "1", "-i", job.FilePath, "-vn", "-b:a", "128k", trim]), _ => { }, _ => { }, errors.Add, cancellation.Token);
-            Require(code == 0 && new FileInfo(trim).Length > 1000, "Audio trim saved");
-            await File.WriteAllTextAsync(Path.Combine(AppContext.BaseDirectory, "self-test-report.json"), JsonSerializer.Serialize(new { passed = true, checks = new[] { "source generation", "audio/video default quality", "best quality", "safe argument handling", "progress", "HTTP audio download", "HTTP video download", "MP3 conversion", "completion", "history", "audio trimming" }, output = job.FilePath }, new JsonSerializerOptions { WriteIndented = true }));
+            await LocalConversion.RunAsync(trim, ["-nostdin", "-n", "-ss", "1", "-t", "1", "-i", job.FilePath, "-vn", "-b:a", "128k"], false, DownloadEngine.RunAsync, cancellation.Token);
+            Require(new FileInfo(trim).Length > 1000, "Audio trim saved");
+            await File.WriteAllTextAsync(Path.Combine(AppContext.BaseDirectory, "self-test-report.json"), JsonSerializer.Serialize(new { passed = true, checks = new[] { "source generation", "audio/video default quality", "best quality", "safe argument handling", "progress", "HTTP audio download", "HTTP video download", "maximum video height", "MP3 conversion", "completion", "history", "audio trimming" }, output = job.FilePath }, new JsonSerializerOptions { WriteIndented = true }));
         }
         finally
         {
@@ -81,9 +86,15 @@ public static class EngineSelfTest
             using var reader = new StreamReader(stream, Encoding.ASCII, false, 1024, true);
             var first = await reader.ReadLineAsync(token) ?? "";
             while (await reader.ReadLineAsync(token) is { Length: > 0 }) { }
-            var isVideo = first.Contains("/video.mp4");
-            var bytes = isVideo ? video : audio;
-            var head = Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: {(isVideo ? "video/mp4" : "audio/wav")}\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n");
+            var path = first.Split(' ').ElementAtOrDefault(1);
+            var (bytes, contentType) = path switch
+            {
+                "/master.m3u8" => (Encoding.ASCII.GetBytes("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=320x180,CODECS=\"avc1.64000C,mp4a.40.2\"\nvideo.m3u8\n"), "application/vnd.apple.mpegurl"),
+                "/video.m3u8" => (Encoding.ASCII.GetBytes("#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2.0,\nsource.ts\n#EXT-X-ENDLIST\n"), "application/vnd.apple.mpegurl"),
+                "/source.ts" => (video, "video/mp2t"),
+                _ => (audio, "audio/wav")
+            };
+            var head = Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n");
             await stream.WriteAsync(head, token);
             if (!first.StartsWith("HEAD")) await stream.WriteAsync(bytes, token);
         }
