@@ -74,6 +74,7 @@ artifacts/
 *.[Zz][Ii][Pp]
 *.7z
 [Pp]ublish/
+/original.png
 
 # Tye
 .tye/
