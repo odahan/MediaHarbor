@@ -1,0 +1,13 @@
+# MediaHarbor license notice
+
+Copyright (c) 2026 Olivier Dahan.
+
+MediaHarbor is licensed under the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License or, at your
+option, any later version. See the accompanying LICENSE file for the full text.
+MediaHarbor is distributed without warranty, to the extent permitted by law.
+You may redistribute it and modify it under the terms of the license.
+
+The corresponding MediaHarbor source and build scripts are available from
+the matching version tag on https://github.com/odahan/MediaHarbor/releases.
+See THIRD-PARTY-NOTICES.md for components with their own licenses.

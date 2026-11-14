@@ -8,28 +8,30 @@ internal static class DistributionFiles
 {
     private const string GuideName = "MediaHarborGuide.html";
     private const string ResourcePrefix = "MediaHarbor.Distribution.";
-    private static readonly bool HasBundledTools = typeof(DistributionFiles).Assembly
-        .GetManifestResourceInfo(ResourcePrefix + "ffmpeg.exe") is not null;
+    internal static bool IsPublished { get; } = typeof(DistributionFiles).Assembly
+        .GetManifestResourceInfo(ResourcePrefix + "LICENSE") is not null;
 
     /// <summary>Gets the executable folder for the distribution or the output folder for development.</summary>
-    internal static string ApplicationDirectory { get; } = HasBundledTools
+    internal static string ApplicationDirectory { get; } = IsPublished
         ? Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory
         : AppContext.BaseDirectory;
 
-    /// <summary>Updates the local guide and extracts missing bundled tools.</summary>
+    /// <summary>Updates the local guide and extracts the published license documents.</summary>
     internal static async Task ExtractAsync()
     {
         await UpdateGuideAsync();
 
-        if (!HasBundledTools)
+        if (!IsPublished)
             return;
 
-        var toolsDirectory = Path.Combine(ApplicationDirectory, "tools");
-        await ExtractAsync("LICENSE-FFmpeg.txt", toolsDirectory);
-        await ExtractAsync("LICENSE-yt-dlp.txt", toolsDirectory);
+        await ExtractAsync("LICENSE", Path.Combine(ApplicationDirectory, "licenses"));
         await ExtractAsync("THIRD-PARTY-NOTICES.md", ApplicationDirectory);
-        await ExtractAsync("ffmpeg.exe", toolsDirectory);
-        await ExtractAsync("yt-dlp.exe", toolsDirectory);
+        foreach (var resourceName in typeof(DistributionFiles).Assembly.GetManifestResourceNames())
+        {
+            if (resourceName.StartsWith(ResourcePrefix, StringComparison.Ordinal) &&
+                resourceName.EndsWith(".txt", StringComparison.Ordinal))
+                await ExtractAsync(resourceName[ResourcePrefix.Length..], Path.Combine(ApplicationDirectory, "licenses"));
+        }
     }
 
     /// <summary>Opens the local guide using the default HTML handler.</summary>

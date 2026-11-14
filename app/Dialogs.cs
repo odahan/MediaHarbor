@@ -18,16 +18,39 @@ public static class Dialogs
     /// <summary>Shows application information and an entry point to the local guide.</summary>
     internal static void About(System.Windows.Input.ICommand helpCommand)
     {
-        var window = Window("About MediaHarbor", 400, 220);
+        var window = Window("About MediaHarbor", 420, 250);
         window.ResizeMode = ResizeMode.NoResize;
         var version = typeof(Dialogs).Assembly.GetName().Version?.ToString(3);
         var panel = new StackPanel { Margin = new Thickness(20) };
         panel.Children.Add(new TextBlock { Text = "MediaHarbor", FontSize = 22, FontWeight = FontWeights.Bold });
         panel.Children.Add(new TextBlock { Text = $"Version {version}", Margin = new Thickness(0, 4, 0, 12) });
         panel.Children.Add(new TextBlock { Text = "Powered by yt-dlp, FFmpeg and CommunityToolkit.Mvvm.", TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Copyright © 2026 Olivier Dahan. GPLv3 or later. You may redistribute MediaHarbor under its license. It comes without warranty.",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) };
         buttons.Children.Add(new Button { Content = "Help", Command = helpCommand, MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) });
+        if (DistributionFiles.IsPublished)
+        {
+            var licenses = new Button { Content = "Licenses", MinWidth = 75, Margin = new Thickness(0, 0, 8, 0) };
+            licenses.Click += (_, _) =>
+            {
+                var dialog = Window("MediaHarbor license", 650, 500);
+                dialog.Content = new TextBox
+                {
+                    Text = File.ReadAllText(Path.Combine(DistributionFiles.ApplicationDirectory, "licenses", "LICENSE")),
+                    IsReadOnly = true,
+                    TextWrapping = TextWrapping.Wrap,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                };
+                dialog.ShowDialog();
+            };
+            buttons.Children.Add(licenses);
+        }
         var close = new Button { Content = "Close", IsCancel = true, IsDefault = true, MinWidth = 75 };
         buttons.Children.Add(close);
         panel.Children.Add(buttons);

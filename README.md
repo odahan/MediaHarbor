@@ -2,6 +2,10 @@
 
 MediaHarbor is a Windows desktop application for downloading YouTube media and converting local media files.
 
+## Download for Windows x64
+
+Download `MediaHarbor.exe` from the [latest release](https://github.com/odahan/MediaHarbor/releases/latest). Run it from a folder where you can save files. On first launch, allow MediaHarbor to download FFmpeg and yt-dlp directly from their publishers. An internet connection is required for this setup.
+
 ## Build prerequisites
 
 - Windows x64 and PowerShell.
@@ -34,6 +38,14 @@ Run the following command or double-click `Publish.BAT` to create the self-conta
 .\Publish.ps1
 ```
 
-The script downloads the pinned tools if either is missing and writes `Publish/MediaHarbor.exe` at the repository root. This single executable includes the .NET 11 Desktop Runtime. Run it from a writable folder. The app places the HTML guide and third-party notices beside the executable and extracts missing copies of FFmpeg, yt-dlp and their licenses into `tools`. It automatically replaces a local guide that differs from the bundled version. **About → Help** opens the local guide in English by default.
+The script writes `Publish/MediaHarbor.exe` at the repository root. The script also writes Publish/MediaHarbor-licenses.zip for the release page. The executable includes the .NET Desktop Runtime and extracts the guide and licensing documents beside the executable. **About → Help** opens the local guide.
 
 Keep executable files, compiled libraries, build outputs such as `bin` and `obj`, and distribution archives out of Git. Distribute binary packages separately through GitHub Releases. See [third-party notices](app/THIRD-PARTY-NOTICES.md) for the bundled tools and their licenses.
+
+
+## License
+
+Copyright (c) 2026 Olivier Dahan. MediaHarbor is licensed under
+GPL-3.0-or-later. See [LICENSE](LICENSE) and the [license notice](app/licenses/MediaHarbor-NOTICE.txt).
+The source and build scripts for the Windows executable are available at its
+matching GitHub release tag.

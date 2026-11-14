@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -16,8 +17,45 @@ public partial class App : Application
         try
         {
             await DistributionFiles.ExtractAsync();
+            if (DistributionFiles.IsPublished && ToolSetup.IsNeeded)
+            {
+                if (MessageBox.Show(
+                    "MediaHarbor needs FFmpeg and yt-dlp. Download the missing tools directly from their publishers on GitHub?",
+                    "MediaHarbor setup", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                {
+                    Shutdown();
+                    return;
+                }
+
+                ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var setup = new Window
+                {
+                    Title = "MediaHarbor setup",
+                    SizeToContent = SizeToContent.WidthAndHeight,
+                    ResizeMode = ResizeMode.NoResize,
+                    WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                    Content = new System.Windows.Controls.TextBlock
+                    {
+                        Text = "Downloading and verifying the media tools. Please wait.",
+                        Margin = new Thickness(24)
+                    }
+                };
+                setup.Closing += PreventSetupClose;
+                setup.Show();
+                try
+                {
+                    await ToolSetup.InstallAsync();
+                }
+                finally
+                {
+                    setup.Closing -= PreventSetupClose;
+                    MainWindow = null;
+                    setup.Close();
+                    ShutdownMode = ShutdownMode.OnLastWindowClose;
+                }
+            }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
         {
             MessageBox.Show($"MediaHarbor could not prepare its files in {DistributionFiles.ApplicationDirectory}.\n\n{ex.Message}",
                 "MediaHarbor", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -66,6 +104,8 @@ public partial class App : Application
         window.Closed += (_, _) => vm.Dispose();
         window.Show();
     }
+
+    private static void PreventSetupClose(object? sender, System.ComponentModel.CancelEventArgs e) => e.Cancel = true;
 
     private async Task RunSelfTestAsync()
     {
