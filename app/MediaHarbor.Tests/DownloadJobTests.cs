@@ -99,7 +99,7 @@ public class DownloadJobTests
             output("FILE|" + file);
             error("PROGRESS|98.0%|1MiB/s|NA|none|opus");
             await finish.Task;
-            if (exitCode != 0) error("Output could not be finalized.");
+            if (exitCode != 0) error("ERROR: Output could not be finalized.");
             return exitCode;
         }));
         var job = new DownloadJob(vm, "https://youtu.be/abc123", vm.Options() with { Folder = folder.FullName });
@@ -121,7 +121,7 @@ public class DownloadJobTests
 
             Assert.Equal(exitCode == 0, job.Complete);
             Assert.Equal(exitCode != 0, job.Failed);
-            Assert.Equal(exitCode == 0 ? "Completed" : "Output could not be finalized.", job.Status);
+            Assert.Equal(exitCode == 0 ? "Completed" : "ERROR: Output could not be finalized.", job.Status);
             Assert.Equal(exitCode == 0 ? "Play" : "Retry", job.ActionLabel);
             Assert.Equal(100, job.Progress);
             Assert.Equal(exitCode == 0 ? 1 : 0, vm.HistoryItems.Count);
@@ -130,6 +130,67 @@ public class DownloadJobTests
         {
             finish.TrySetResult();
             await run;
+            folder.Delete(recursive: true);
+        }
+    }
+
+    [WpfFact]
+    public async Task Sign_In_Stops_Pending_Jobs_And_Bulk_Retry_Uses_Updated_Cookies()
+    {
+        var folder = Directory.CreateTempSubdirectory();
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var retried = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = new List<string[]>();
+        using var vm = new MainViewModel(true, async (info, _, output, error, token) =>
+        {
+            calls.Add(info.ArgumentList.ToArray());
+            if (calls.Count == 1)
+            {
+                firstStarted.SetResult();
+                await failFirst.Task.WaitAsync(token);
+                error("ERROR: [youtube] Sign in to confirm you’re not a bot. Use --cookies for authentication.");
+                return 1;
+            }
+
+            var file = Path.Combine(folder.FullName, $"Track {calls.Count}.mp3");
+            File.WriteAllText(file, "media");
+            output("FILE|" + file);
+            return 0;
+        });
+        vm.Slots.SetLimit(1);
+        var options = vm.Options() with { Folder = folder.FullName };
+        var first = new DownloadJob(vm, "https://youtu.be/abc123", options);
+        var second = new DownloadJob(vm, "https://youtu.be/def456", options);
+        second.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(DownloadJob.Status) && second.Status == "Completed") retried.TrySetResult();
+        };
+        vm.Jobs.Add(first);
+        vm.Jobs.Add(second);
+        var firstRun = first.StartAsync();
+        var secondRun = second.StartAsync();
+        try
+        {
+            await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            failFirst.SetResult();
+            await Task.WhenAll(firstRun, secondRun).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(first.Failed);
+            Assert.Equal("Resume", second.ActionLabel);
+            Assert.Contains("YouTube requested sign-in", second.Status);
+            Assert.Single(calls);
+
+            vm.Cookies = Path.Combine(folder.FullName, "cookies.txt");
+            vm.ResumeAllCommand.Execute(null);
+            await retried.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(3, calls.Count);
+            Assert.True(first.Complete);
+            Assert.All(calls.Skip(1), attempt => Assert.Contains(vm.Cookies, attempt));
+        }
+        finally
+        {
+            failFirst.TrySetResult();
+            await Task.WhenAll(firstRun, secondRun);
             folder.Delete(recursive: true);
         }
     }

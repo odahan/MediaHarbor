@@ -10,6 +10,7 @@ namespace MediaHarbor;
 public partial class DownloadJob : ObservableObject
 {
     private readonly MainViewModel owner;
+    private readonly bool playlistEntry;
     private CancellationTokenSource? cancellation;
     private bool paused;
     private bool complete;
@@ -31,9 +32,10 @@ public partial class DownloadJob : ObservableObject
     [ObservableProperty] private double progress;
     private string? resolvedUrl;
 
-    public DownloadJob(MainViewModel owner, string url, DownloadOptions options)
+    public DownloadJob(MainViewModel owner, string url, DownloadOptions options, bool playlistEntry = false)
     {
         this.owner = owner;
+        this.playlistEntry = playlistEntry;
         Url = url;
         Options = options;
         title = Path.GetFileName(Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.AbsolutePath : url);
@@ -59,15 +61,31 @@ public partial class DownloadJob : ObservableObject
         {
             Status = "Waiting for a download slot…";
             var slots = owner.Slots;
-            await slots.WaitAsync(token);
+            if (await slots.WaitAsync(token, playlistEntry) is { } stopped)
+            {
+                PausePending(stopped, token);
+                return;
+            }
             try
             {
                 Status = "Reading media information…";
                 token.ThrowIfCancellationRequested();
+                if (slots.PauseReason is { } pausedQueue)
+                {
+                    PausePending(pausedQueue, token);
+                    return;
+                }
                 var url = resolvedUrl ?? Url;
+                var options = Options with { Cookies = owner.Cookies };
                 if (url.StartsWith("ytsearch1:", StringComparison.Ordinal))
                 {
-                    var matches = await DownloadEngine.ListAsync(url, false, Options, owner.RunProcess, token);
+                    IReadOnlyList<SearchResult> matches;
+                    try { matches = await DownloadEngine.ListAsync(url, false, options, owner.RunProcess, token); }
+                    catch (InvalidOperationException ex)
+                    {
+                        owner.HandleYouTubeError(ex.Message);
+                        throw;
+                    }
                     url = matches.FirstOrDefault()?.Url ?? throw new InvalidOperationException("No matching YouTube video was found.");
                     resolvedUrl = url;
                 }
@@ -78,7 +96,7 @@ public partial class DownloadJob : ObservableObject
                 reservation = destination;
 
                 Directory.CreateDirectory(folder);
-                var info = DownloadEngine.StartInfo("yt-dlp", DownloadEngine.Arguments(url, Options with { Folder = folder }));
+                var info = DownloadEngine.StartInfo("yt-dlp", DownloadEngine.Arguments(url, options with { Folder = folder }));
                 var code = await RunDownloadAsync(info, token);
                 token.ThrowIfCancellationRequested();
                 if (code != 0) throw new InvalidOperationException(DownloadError(code));
@@ -104,29 +122,56 @@ public partial class DownloadJob : ObservableObject
         }
     }
 
+    private void PausePending(string reason, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        paused = true;
+        Status = reason;
+        ActionLabel = "Resume";
+    }
+
     /// <summary>Marshals job updates to WPF and applies them before evaluating the process result.</summary>
     private async Task<int> RunDownloadAsync(ProcessStartInfo info, CancellationToken token)
     {
         var dispatcher = Dispatcher.CurrentDispatcher;
+        var outputResponse = new DownloadResponse();
+        var errorResponse = new DownloadResponse();
         var outputUpdate = Task.CompletedTask;
         var errorUpdate = Task.CompletedTask;
+        int code;
         try
         {
-            return await owner.RunProcess(info, _ => { }, line =>
+            code = await owner.RunProcess(info, _ => { }, line =>
             {
-                if (IsJobMessage(line)) outputUpdate = DispatchUpdate(line);
+                outputUpdate = ReadOutput(line, outputResponse) ?? outputUpdate;
             }, line =>
             {
-                if (IsJobMessage(line)) errorUpdate = DispatchUpdate(line);
-                else if (!string.IsNullOrWhiteSpace(line)) lastError = line;
+                if (line.StartsWith("ERROR:", StringComparison.Ordinal))
+                {
+                    lastError = line;
+                    if (DownloadResponse.RequiresSignIn(line))
+                        errorUpdate = Dispatch(() => owner.HandleYouTubeError(line));
+                }
+                else errorUpdate = ReadOutput(line, errorResponse) ?? errorUpdate;
             }, token);
         }
         finally
         {
             await Task.WhenAll(outputUpdate, errorUpdate);
         }
+        if (code != 0 && !outputResponse.HasRetryAfter && !errorResponse.HasRetryAfter && DownloadResponse.IsRateLimited(lastError))
+            owner.HandleYouTubeError(lastError);
+        return code;
 
-        Task DispatchUpdate(string line) => dispatcher.InvokeAsync(() => Receive(line), DispatcherPriority.Normal, token).Task;
+        Task? ReadOutput(string line, DownloadResponse response)
+        {
+            if (IsJobMessage(line)) return Dispatch(() => Receive(line));
+            return response.ReadRetryAfter(line, DateTimeOffset.UtcNow) is { } retryAfter
+                ? Dispatch(() => owner.DeferYouTubeDownloads(retryAfter))
+                : null;
+        }
+
+        Task Dispatch(Action update) => dispatcher.InvokeAsync(update, DispatcherPriority.Normal, token).Task;
     }
 
     private string DownloadError(int code)
@@ -175,6 +220,7 @@ public partial class DownloadJob : ObservableObject
             cancellation?.Cancel();
             return;
         }
+        owner.Slots.Resume();
         paused = false;
         _ = StartAsync();
     }

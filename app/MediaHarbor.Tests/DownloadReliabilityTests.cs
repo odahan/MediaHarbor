@@ -5,6 +5,59 @@ namespace MediaHarbor.Tests;
 
 public class DownloadReliabilityTests
 {
+    [WpfFact]
+    public async Task Playlist_Starts_Are_Spaced_But_Direct_Titles_Use_A_Free_Slot_Immediately()
+    {
+        var queue = new DownloadQueue(3, _ => TimeSpan.FromMilliseconds(100));
+        Assert.Null(await queue.WaitAsync(playlistEntry: true));
+        var second = queue.WaitAsync(playlistEntry: true);
+        var direct = queue.WaitAsync();
+
+        Assert.True(direct.IsCompletedSuccessfully);
+        Assert.False(second.IsCompleted);
+        Assert.Null(await second.WaitAsync(TimeSpan.FromSeconds(3)));
+        queue.Release();
+        queue.Release();
+        queue.Release();
+    }
+
+    [WpfFact]
+    public async Task Full_Queue_Paces_Refill_And_Retry_After_Applies_To_Direct_Titles()
+    {
+        var queue = new DownloadQueue(8, active => active >= 8 ? TimeSpan.FromMilliseconds(100) : TimeSpan.Zero);
+        for (var index = 0; index < 8; index++) Assert.Null(await queue.WaitAsync());
+
+        var playlist = queue.WaitAsync(playlistEntry: true);
+        queue.Release();
+        Assert.False(playlist.IsCompleted);
+        var until = DateTimeOffset.UtcNow.AddMilliseconds(250);
+        Assert.True(queue.DeferUntil(until));
+        var direct = queue.WaitAsync();
+        Assert.False(direct.IsCompleted);
+
+        Assert.Null(await direct.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.True(DateTimeOffset.UtcNow >= until);
+        Assert.False(playlist.IsCompleted);
+        queue.Release();
+        Assert.Null(await playlist.WaitAsync(TimeSpan.FromSeconds(3)));
+        for (var index = 0; index < 8; index++) queue.Release();
+    }
+
+    [Theory]
+    [InlineData("reply: 'HTTP/1.1 429 Too Many Requests\\r\\n'", "header: Retry-After: 13", 13)]
+    [InlineData("< HTTP/2 503", "< retry-after: Thu, 19 Nov 2026 12:00:21 GMT", 21)]
+    [InlineData("reply: 'HTTP/1.1 200 OK\\r\\n'", "header: Retry-After: 13", null)]
+    [InlineData("< HTTP/2 429", "> Retry-After: 13", null)]
+    [InlineData("< HTTP/2 429", "< Retry-After: invalid", null)]
+    public void Retry_After_Is_Parsed_From_Rate_Limited_Responses(string status, string header, int? seconds)
+    {
+        var now = new DateTimeOffset(2026, 11, 19, 12, 0, 0, TimeSpan.Zero);
+        var response = new DownloadResponse();
+        Assert.Null(response.ReadRetryAfter(status, now));
+        Assert.Equal(seconds is { } delay ? now.AddSeconds(delay) : (DateTimeOffset?)null, response.ReadRetryAfter(header, now));
+        Assert.Equal(seconds.HasValue, response.HasRetryAfter);
+    }
+
     [Fact]
     public async Task Lowering_Limit_Waits_For_Active_Downloads_And_Preserves_Queue_Order()
     {

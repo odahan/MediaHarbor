@@ -115,14 +115,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Save();
     }
 
-    public void Enqueue(string url, DownloadOptions options)
+    public void Enqueue(string url, DownloadOptions options, bool playlistEntry = false)
     {
         if (!MediaLogic.IsValidDownloadUrl(url))
         {
             Notice = "Only YouTube links are supported.";
             return;
         }
-        var job = new DownloadJob(this, url, options);
+        var job = new DownloadJob(this, url, options, playlistEntry);
         Jobs.Add(job);
         Notice = $"{Jobs.Count} item(s) in the list";
         _ = job.StartAsync();
@@ -152,11 +152,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
             var playlistFolder = playlist ? Path.Combine(options.Folder, MediaLogic.PlaylistFolderName(results)) : options.Folder;
             var positions = results.Select((entry, index) => (entry, index)).ToDictionary(item => item.entry, item => item.index + 1);
             foreach (var entry in selected)
-                Enqueue(entry.Url, options with { Folder = playlistFolder, Prefix = playlist && options.Numbering ? $"{positions[entry]:000} - " : "" });
+                Enqueue(entry.Url, options with { Folder = playlistFolder, Prefix = playlist && options.Numbering ? $"{positions[entry]:000} - " : "" }, playlistEntry: playlist);
             Notice = $"Added {selected.Count} item(s)";
         }
         catch (OperationCanceledException) { Notice = "Search cancelled"; }
-        catch (Exception ex) { Notice = ex.Message; MessageBox.Show(ex.Message, "Unable to read media"); }
+        catch (Exception ex) { Notice = ex.Message; HandleYouTubeError(ex.Message); MessageBox.Show(ex.Message, "Unable to read media"); }
         finally { busy.Close(); }
     }
 
@@ -188,8 +188,33 @@ public partial class MainViewModel : ObservableObject, IDisposable
     internal bool Reserve(DownloadDestination destination) => activeDestinations.Add(destination);
     internal void Release(DownloadDestination destination) => activeDestinations.Remove(destination);
 
+    internal void HandleYouTubeError(string error)
+    {
+        if (DownloadResponse.RequiresSignIn(error))
+        {
+            Slots.Pause("Paused · YouTube requested sign-in or valid cookies");
+            Notice = "YouTube requested sign-in. Use Retry all pending when ready.";
+        }
+        else if (DownloadResponse.IsRateLimited(error))
+        {
+            DeferYouTubeDownloads(DateTimeOffset.UtcNow.AddMinutes(1));
+        }
+    }
+
+    internal void DeferYouTubeDownloads(DateTimeOffset until)
+    {
+        if (Slots.DeferUntil(until) && Slots.PauseReason is null)
+            Notice = $"YouTube rate limit · next start after {until.ToLocalTime():HH:mm:ss}";
+    }
+
     [RelayCommand] private void FocusSearch() => SearchRequested?.Invoke();
-    [RelayCommand] private void ResumeAll() { foreach (var job in Jobs.ToArray()) job.Resume(); }
+    [RelayCommand]
+    private void ResumeAll()
+    {
+        if (Slots.PauseReason is not null) Notice = "Downloads queued again.";
+        Slots.Resume();
+        foreach (var job in Jobs.ToArray()) job.Resume();
+    }
     [RelayCommand] private void Clear() { foreach (var job in Jobs.Where(j => j.Complete).ToArray()) Jobs.Remove(job); }
     [RelayCommand] private void Settings() { Dialogs.Settings(this); Save(); }
     [RelayCommand] private void Speed()

@@ -217,7 +217,7 @@ public static class Dialogs
         DockPanel.SetDock(browse, Dock.Right); cookieDock.Children.Add(browse);
         var cookies = new TextBox { Text = vm.Cookies }; cookieDock.Children.Add(cookies); panel.Children.Add(cookieDock);
         browse.Click += (_, _) => { var file = new OpenFileDialog { Filter = "Cookies text|*.txt|All files|*.*" }; if (file.ShowDialog() == true) cookies.Text = file.FileName; };
-        panel.Children.Add(new TextBlock { Text = "The download limit also applies to jobs already waiting. Other download settings apply when you add a job. Auto detect asks before adding a link.", TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.SlateGray, Margin = new Thickness(0, 15, 0, 10), FontSize = 11 });
+        panel.Children.Add(new TextBlock { Text = "The download limit applies to jobs already waiting. Cookie changes apply when a download starts or retries. Other download settings apply when you add a job. Auto detect asks before adding a link.", TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.SlateGray, Margin = new Thickness(0, 15, 0, 10), FontSize = 11 });
         var save = new Button { Content = "Save settings", IsDefault = true, HorizontalAlignment = HorizontalAlignment.Right };
         save.Click += (_, _) =>
         {

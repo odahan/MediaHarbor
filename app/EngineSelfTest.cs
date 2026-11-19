@@ -66,7 +66,15 @@ public static class EngineSelfTest
             var trim = Path.Combine(folder, "trimmed.mp3");
             await LocalConversion.RunAsync(trim, ["-nostdin", "-n", "-ss", "1", "-t", "1", "-i", job.FilePath, "-vn", "-b:a", "128k"], false, DownloadEngine.RunAsync, cancellation.Token);
             Require(new FileInfo(trim).Length > 1000, "Audio trim saved");
-            await File.WriteAllTextAsync(Path.Combine(DistributionFiles.ApplicationDirectory, "self-test-report.json"), JsonSerializer.Serialize(new { passed = true, checks = new[] { "source generation", "audio/video default quality", "best quality", "safe argument handling", "progress", "HTTP audio download", "HTTP video download", "maximum video height", "MP3 conversion", "completion", "history", "audio trimming" }, output = job.FilePath }, new JsonSerializerOptions { WriteIndented = true }));
+            var limitedJob = new DownloadJob(vm, $"http://127.0.0.1:{port}/limited.wav", options);
+            await limitedJob.StartAsync();
+            Require(limitedJob.Failed && limitedJob.Status.Contains("429"), "HTTP rate limit reported");
+            using var admissionTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var nextSlot = vm.Slots.WaitAsync(admissionTimeout.Token);
+            Require(!nextSlot.IsCompleted, "HTTP Retry-After deferred new starts");
+            Require(await nextSlot is null, "HTTP Retry-After expired and the queue resumed");
+            vm.Slots.Release();
+            await File.WriteAllTextAsync(Path.Combine(DistributionFiles.ApplicationDirectory, "self-test-report.json"), JsonSerializer.Serialize(new { passed = true, checks = new[] { "source generation", "audio/video default quality", "best quality", "safe argument handling", "progress", "HTTP audio download", "HTTP video download", "maximum video height", "MP3 conversion", "completion", "history", "audio trimming", "HTTP Retry-After" }, output = job.FilePath }, new JsonSerializerOptions { WriteIndented = true }));
         }
         finally
         {
@@ -87,6 +95,11 @@ public static class EngineSelfTest
             var first = await reader.ReadLineAsync(token) ?? "";
             while (await reader.ReadLineAsync(token) is { Length: > 0 }) { }
             var path = first.Split(' ').ElementAtOrDefault(1);
+            if (path == "/limited.wav")
+            {
+                await stream.WriteAsync("HTTP/1.1 429 Too Many Requests\r\nRetry-After: 3\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), token);
+                continue;
+            }
             var (bytes, contentType) = path switch
             {
                 "/master.m3u8" => (Encoding.ASCII.GetBytes("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=320x180,CODECS=\"avc1.64000C,mp4a.40.2\"\nvideo.m3u8\n"), "application/vnd.apple.mpegurl"),

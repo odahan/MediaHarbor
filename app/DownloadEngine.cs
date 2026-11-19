@@ -36,7 +36,7 @@ public static class DownloadEngine
         {
             "--ignore-config", "--no-warnings", "--newline", "--encoding", "utf-8",
             "--continue", "--windows-filenames", "--no-mtime", "--ffmpeg-location", Tool("ffmpeg"),
-            "--progress", "--progress-delta", "0.25", "--no-color",
+            "--progress", "--progress-delta", "0.25", "--no-color", "--print-traffic",
             "--progress-template", "download:PROGRESS|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s|%(info.vcodec)s|%(info.acodec)s",
             "--print", "before_dl:TITLE|%(title)s", "--print", "post_process:POSTPROCESS|%(id)s",
             "--print", "after_move:FILE|%(filepath)s",
