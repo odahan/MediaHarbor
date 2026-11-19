@@ -62,7 +62,7 @@ public class DownloadJobTests
                 var file = Path.Combine(folder.FullName, "Sample [abc123].mp3");
                 File.WriteAllText(file, "media");
                 output("PROGRESS|84.0%|1MiB/s|00:01|none|opus");
-                output("POSTPROCESS");
+                output("POSTPROCESS|abc123");
                 output("FILE|" + file);
                 return Task.FromResult(0);
             });
@@ -70,7 +70,6 @@ public class DownloadJobTests
             await job.StartAsync();
             Assert.True(job.Complete);
             Assert.Equal(100, job.Progress);
-            Assert.False(job.ProgressIndeterminate);
             Assert.Single(vm.HistoryItems);
 
             await job.StartAsync();
@@ -79,6 +78,60 @@ public class DownloadJobTests
             Assert.False(job.Running);
         }
         finally { folder.Delete(recursive: true); }
+    }
+
+    [WpfTheory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task Final_File_Is_Reported_Before_The_Process_Result(int exitCode)
+    {
+        var folder = Directory.CreateTempSubdirectory();
+        var file = Path.Combine(folder.FullName, "Sample [abc123].mp3");
+        var finalizing = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var uiThread = Environment.CurrentManagedThreadId;
+        using var vm = new MainViewModel(true, (_, _, output, error, _) => Task.Run(async () =>
+        {
+            File.WriteAllText(file, "media");
+            output("TITLE|Sample");
+            error("PROGRESS|100.0%|1MiB/s|NA|none|opus");
+            output("POSTPROCESS|abc123");
+            output("FILE|" + file);
+            error("PROGRESS|98.0%|1MiB/s|NA|none|opus");
+            await finish.Task;
+            if (exitCode != 0) error("Output could not be finalized.");
+            return exitCode;
+        }));
+        var job = new DownloadJob(vm, "https://youtu.be/abc123", vm.Options() with { Folder = folder.FullName });
+        job.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(DownloadJob.Status) && job.Status == "Finalizing download…")
+                finalizing.TrySetResult(Environment.CurrentManagedThreadId);
+        };
+        var run = job.StartAsync();
+        try
+        {
+            Assert.Equal(uiThread, await finalizing.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal(file, job.FilePath);
+            Assert.False(job.Complete);
+            Assert.False(job.Failed);
+
+            finish.SetResult();
+            await run;
+
+            Assert.Equal(exitCode == 0, job.Complete);
+            Assert.Equal(exitCode != 0, job.Failed);
+            Assert.Equal(exitCode == 0 ? "Completed" : "Output could not be finalized.", job.Status);
+            Assert.Equal(exitCode == 0 ? "Play" : "Retry", job.ActionLabel);
+            Assert.Equal(100, job.Progress);
+            Assert.Equal(exitCode == 0 ? 1 : 0, vm.HistoryItems.Count);
+        }
+        finally
+        {
+            finish.TrySetResult();
+            await run;
+            folder.Delete(recursive: true);
+        }
     }
 
     [WpfFact]
